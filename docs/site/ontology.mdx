@@ -1,0 +1,82 @@
+---
+title: "Ontology and schema"
+description: "The records, evidence and relationships that make up Commons."
+---
+
+Your work generates sources, decisions, conversations and findings. How you
+organise and connect that information is your **ontology**, and it
+should reflect what you’re trying to achieve. A **schema** defines how those
+records and relationships are stored.
+
+Say you’re researching whether one AI model can repair another. Save the paper
+as a **Source**, keep its original text in an **Artifact**, and connect a **Note**
+about the method to that Source. If it raises a question worth following up, link
+a **Task**. Another agent can follow those connections back to the evidence.
+
+## The database
+
+Commons uses **PostgreSQL**, a database that stores information in tables. It keeps
+records and relationships together, checks that references are valid, and supports
+reliable updates. Search vectors also live in PostgreSQL.
+
+The **Objects** table holds the core knowledge records. Other tables hold identities,
+original evidence, activity and supporting data:
+
+| Table | What it stores |
+| --- | --- |
+| `objects` | Tasks, Notes, Entities, Sources, Themes, Events and Threads |
+| `users` | Human and agent identities |
+| `credentials` | Sessions and scoped access tokens, stored as hashes |
+| `artifacts` | Original text, files and their versions |
+| `connections` | Typed relationships with an explanation |
+| `changes` | Record changes, corrections and history |
+| `traces` | Observed executions |
+| `trace_items` | Messages, tool calls, results and steps |
+| `request_receipts` | Saved write results used to handle retries |
+| `chunks` | Derived text and vectors used for search |
+
+Connections can link Objects, Users, Artifacts and Traces. Some tables also have
+direct ownership references, such as an Artifact's owning Object.
+
+## An Object is an atomic unit of information
+
+An Object is a small record about one thing: a task, decision, organisation or
+occurrence. It has a title, description, body and fields for its kind.
+
+| Kind | Use it for |
+| --- | --- |
+| Task | Work with an owner, deadline, status and priority |
+| Note | A finding, fact, idea, question or exact excerpt |
+| Entity | A supplier, organisation, person or other subject |
+| Source | A document or work whose evidence you keep |
+| Theme | An organising concept |
+| Event | An occurrence |
+| Thread | A captured conversation |
+
+The formatted title, description and body must fit **500 tokens**, including
+formatting. Keep long documents in Artifacts and link them to a concise Object.
+Oversized Objects are rejected rather than shortened automatically.
+
+Users and Traces are separate records, not Object kinds. A Thread identifies a
+conversation; its messages and activity are stored separately in `trace_items`.
+
+## Evidence and relationships
+
+A Source describes a work. Its Artifacts keep the original text or files.
+A Note can record a finding and connect it to the Source it came from.
+
+Give each Connection a specific meaning, such as “derived from” or “depends on”,
+and explain why it exists. A saved claim is still a claim; keeping its evidence
+lets someone check it.
+
+## Adapt it to your organisation
+
+Every organisation has different work and vocabulary. Start with existing kinds
+and fields. A supplier can be an Entity; procurement work can be a Task with a
+project field.
+
+New kinds or fields may require changes to validation, migrations, search, tools
+and the UI. Update and test those together so agents and the app use the same
+structure. See [Customisation and Overlays](/customisation).
+
+The repository's `docs/atomic-schema.md` defines the exact tables and fields.

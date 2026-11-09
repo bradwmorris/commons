@@ -1,0 +1,130 @@
+name: commons
+
+x-app: &app
+  image: ${COMMONS_APP_IMAGE:-commons:${COMMONS_IMAGE_TAG:-local}}
+  build: .
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  networks: [private]
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: ${COMMONS_DB_IMAGE:-commons-postgres:16.15-vector0.8.1}
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    environment:
+      POSTGRES_DB: commons
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [postgres_password, migrator_password, app_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/10-commons.sh:ro
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U postgres -d commons']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  ollama:
+    image: ${COMMONS_MODEL_IMAGE:-commons-ollama:0.40.5}
+    build:
+      context: .
+      dockerfile: docker/ollama.Dockerfile
+    environment:
+      OLLAMA_MODELS: /models
+      OLLAMA_NO_CLOUD: '1'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+    volumes: [models:/models]
+    networks: [private]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  model-provision:
+    image: ${COMMONS_MODEL_IMAGE:-commons-ollama:0.40.5}
+    build:
+      context: .
+      dockerfile: docker/ollama.Dockerfile
+    profiles: [tools]
+    entrypoint: [/usr/local/bin/provision-model]
+    environment:
+      OLLAMA_MODELS: /models
+    volumes: [models:/models]
+    networks: [provision]
+
+  app:
+    <<: *app
+    networks: [private, ingress]
+    environment:
+      DATABASE_URL_FILE: /run/secrets/app_url
+      COMMONS_ORIGIN: ${COMMONS_ORIGIN:?Run scripts/dev-compose-config and source .commons/compose/config}
+      COMMONS_LOCAL_USER: ${COMMONS_LOCAL_USER:-}
+      COMMONS_INSTALLATION_NAME: ${COMMONS_INSTALLATION_NAME:-Commons}
+      COMMONS_APPEARANCE: ${COMMONS_APPEARANCE:-}
+      COMMONS_THEME: ${COMMONS_THEME:-charcoal}
+      COMMONS_BIND: '0.0.0.0'
+      PORT: '3000'
+      COMMONS_OLLAMA_URL: http://ollama:11434
+    secrets: [app_url]
+    ports:
+      - '127.0.0.1:${COMMONS_HTTP_PORT:-3000}:3000'
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:3000/api/health]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *app
+    profiles: [tools]
+    command: [migrate]
+    environment:
+      DATABASE_URL_FILE: /run/secrets/migrator_url
+    secrets: [migrator_url]
+
+  bootstrap:
+    <<: *app
+    profiles: [tools]
+    command: [bootstrap]
+    environment:
+      DATABASE_URL_FILE: /run/secrets/app_url
+      COMMONS_ADMIN_USER: ${COMMONS_ADMIN_USER:-admin}
+      COMMONS_ADMIN_NAME: ${COMMONS_ADMIN_NAME:-Administrator}
+      COMMONS_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+    secrets: [app_url, admin_password]
+
+networks:
+  private:
+    internal: true
+  ingress:
+  provision:
+
+volumes:
+  pgdata:
+  models:
+
+secrets:
+  postgres_password:
+    file: ${COMMONS_CONFIG_DIR:-.commons/compose}/secrets/postgres_password
+  migrator_password:
+    file: ${COMMONS_CONFIG_DIR:-.commons/compose}/secrets/migrator_password
+  app_password:
+    file: ${COMMONS_CONFIG_DIR:-.commons/compose}/secrets/app_password
+  app_url:
+    file: ${COMMONS_CONFIG_DIR:-.commons/compose}/secrets/app_url
+  migrator_url:
+    file: ${COMMONS_CONFIG_DIR:-.commons/compose}/secrets/migrator_url
+  admin_password:
+    file: ${COMMONS_CONFIG_DIR:-.commons/compose}/secrets/admin_password

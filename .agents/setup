@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+missing=()
+for package in postgresql-15 postgresql-client-15 postgresql-server-dev-15 build-essential pkg-config libssl-dev curl python3; do
+  if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx 'install ok installed'; then
+    missing+=("$package")
+  fi
+done
+if ((${#missing[@]})); then
+  sudo apt-get update -qq
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
+fi
+if ! grep -q "default_version = '0.8.1'" /usr/share/postgresql/15/extension/vector.control 2>/dev/null; then
+  vector_work="$(mktemp -d)"
+  trap 'rm -rf "$vector_work"' EXIT
+  curl -fsSL https://github.com/pgvector/pgvector/archive/refs/tags/v0.8.1.tar.gz -o "$vector_work/vector.tar.gz"
+  echo "a9094dfb85ccdde3cbb295f1086d4c71a20db1d26bf1d6c39f07a7d164033eb4  $vector_work/vector.tar.gz" | sha256sum -c -
+  tar -xzf "$vector_work/vector.tar.gz" -C "$vector_work"
+  make -C "$vector_work/pgvector-0.8.1" PG_CONFIG=/usr/lib/postgresql/15/bin/pg_config OPTFLAGS=''
+  sudo make -C "$vector_work/pgvector-0.8.1" PG_CONFIG=/usr/lib/postgresql/15/bin/pg_config install
+  rm -rf "$vector_work"
+  trap - EXIT
+fi
+command -v npm >/dev/null || { echo 'Install Node 22+ and npm first; see docs/getting-started.md' >&2; exit 1; }
+node -e 'if (Number(process.versions.node.split(".")[0]) < 22) process.exit(1)' || {
+  echo 'Node 22+ is required; see docs/getting-started.md' >&2; exit 1;
+}
+if ! test -x "$HOME/.cargo/bin/rustup"; then
+  installer="$(mktemp)"
+  trap 'rm -f "$installer"' EXIT
+  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o "$installer"
+  sh "$installer" -y --profile minimal --default-toolchain 1.90.0
+fi
+source "$HOME/.cargo/env"
+rustup show active-toolchain
+cargo build --locked
+npm ci --prefix web
+npm run build --prefix web
+echo 'Dependencies built. Start services and initialize explicitly: docs/getting-started.md'

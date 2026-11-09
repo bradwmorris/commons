@@ -1,0 +1,12 @@
+Claude Code, Codex and Hermes Agent marks:
+https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons
+Files: claudecode-color.svg, codex-color.svg, hermesagent.svg
+License: MIT; full notice in LICENSE-lobehub.txt.
+
+Pi coding-agent mark:
+https://pi.dev/logo-auto.svg
+Linked by https://github.com/earendil-works/pi/blob/main/README.md
+Original colours and paths preserved. Product marks belong to their respective owners.
+
+This diagram illustrates external agent choices and the shared-knowledge architecture.
+The logos do not establish completed client compatibility tests; see the connection page for verified client status.

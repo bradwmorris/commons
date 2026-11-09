@@ -1,0 +1,53 @@
+---
+title: "Customisation and Overlays"
+description: "Fit Commons to your organisation's work."
+---
+
+The base Commons app gives your agents a shared database, API and tools. An
+**overlay** is where you keep your organisation’s configuration, appearance,
+instructions, skills and workflows. Start with what your work needs.
+
+## Start with the existing structure
+
+Use the current kinds and fields before changing the schema. For example:
+
+| Your work | Commons record |
+| --- | --- |
+| Supplier | Entity with `entity_kind:"supplier"` |
+| Procurement work | Task with `project:"procurement"` |
+| Policy | Source with the original text in an Artifact |
+| Exception decision | Note connected to the policy |
+
+This gives the organisation its own vocabulary without adding new Object kinds.
+
+## Add instructions and skills
+
+Tell agents what good work looks like: which evidence to read, what to retain and
+when to update an existing record. Reference the standard tools rather than copying
+the API specification into every skill.
+
+Keep private records, credentials and local operating state outside shared source code.
+
+## Change the name and appearance
+
+In the installation's private configuration:
+
+```sh
+export COMMONS_INSTALLATION_NAME='Example procurement'
+export COMMONS_THEME=blue-slate
+```
+
+Recreate the app using the installation procedure to apply the settings. Supported
+themes and appearance tokens are documented in `docs/appearance.md` in the repository.
+
+## Change the schema when needed
+
+Today, changing the database schema means changing the base app. Update the API
+and validation with it. Check whether search, the tools and the interface need to
+change too.
+
+Test in a separate installation, refresh the MCP connector, and check reads,
+writes and upgrades with existing records before applying the change to real work.
+
+Record your customisations and back up before upgrades. Use the repository's
+`docs/installation-lifecycle.md` for backup, restore and migration procedures.

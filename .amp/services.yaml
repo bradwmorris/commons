@@ -1,0 +1,11 @@
+services:
+  commons-db:
+    command: bash -c 'source scripts/dev-env; exec scripts/dev-db'
+    port: 55432
+  commons:
+    command: scripts/dev-serve
+    port: 3000
+    health: /api/health
+    portal:
+      title: Commons synthetic demo
+      description: Private synthetic Context demo. Protected-demo mode opens directly after Amp authentication; see docs/demo.md for setup and resume instructions.

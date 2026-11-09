@@ -1,0 +1,71 @@
+---
+title: "Inspect and Improve"
+description: "Review real work, find the problem and check the fix."
+---
+
+Start with work that matters. Define what a good result looks like, then look at
+what the agent did, what worked and what needs improving. Check whether it found
+the right evidence, used it correctly and saved something worth reusing.
+
+## Capture the activity
+
+MCP gives agents access to knowledge. Conversation and tool activity capture must
+be set up separately.
+
+Compare a known interaction with what was saved. Check which messages, calls and
+results are present, and record any gaps. Available coverage depends on the client,
+version and capture configuration. Native timed Traces also need separate setup.
+
+Captured conversations are shared with authenticated readers in the installation.
+Choose what to capture with that in mind. Capture does not include hidden reasoning.
+
+See the [agent connector guide](/connect) for capture and trace setup by client.
+
+## Review a few examples
+
+If an agent misses a conversation about a research finding, open the search call
+and check its query and results. Check whether the conversation was captured and
+indexed. Then check whether the agent opened the right result or stopped too soon.
+Use what you find to decide what to fix, then run the same task again.
+
+Inspect the available activity and evidence. Keep record IDs, versions and step
+references so you can return to the same example. Check any export against what
+was actually saved.
+
+Use a simple worksheet outside the app:
+
+| What happened | Assessment | Next action |
+| --- | --- | --- |
+| Agent used an outdated policy when the current one was available | Wrong evidence selected | Clarify version selection and retest |
+| A tool result is missing from capture | Cannot assess | Fix capture coverage |
+| Agent read the right policy and explained the decision | Successful case | Keep it as a test example |
+
+Write down the first visible problem in plain language. Include successful cases.
+Once patterns repeat, group them into specific failure categories.
+
+If you score those categories, use **1** for a failure present and **0** for one
+checked and absent. Keep “cannot assess” separate. Report how many examples you
+could assess and which rules you used.
+
+This review approach draws on *Evals for AI Engineers* by Shreya Shankar and Hamel Husain.
+
+## Compare with and without Commons
+
+Try the same task in separate fresh sessions, with Commons knowledge available in
+one and withheld in the other. Keep the model, request, other tools and starting
+files comparable. Record other memory sources and prevent the first run from
+changing the second.
+
+Compare the answer, evidence, errors and help required. Include time and cost when
+measured. One comparison can show a useful example; it cannot establish a general benefit.
+
+## Change one thing and try again
+
+The cause might be a tool problem, unclear instructions, missing knowledge or a
+capture gap. Fix the cause and repeat the relevant examples, including ones that
+previously worked.
+
+Automated reviewers and prompt optimisation can come later. Keep their suggestions
+separate from human judgements. If you reuse reviewed traces for evaluation or
+training, retain the originals, corrections and reasons. Saving knowledge does not
+change model weights.

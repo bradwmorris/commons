@@ -1,0 +1,54 @@
+---
+title: "Overview and what is"
+description: "Shared knowledge for people and their agents."
+---
+
+Commons gives your agents somewhere to draw from and write back to, so what you
+learn improves future work. Use whichever agent and interface you prefer. Keep the
+context and capabilities you’re building in a system you own.
+
+![Agents share accumulating PostgreSQL context through MCP and a Rust API, alongside an overlay of skills, tools and workflows.](/images/components-v4/shared-context-capabilities-v4.png)
+
+## Bring your own agents
+
+The model decides what to do next. The harness gives it tools, runs them, and
+passes the results back. Commons sits alongside the agent and its harness, giving
+you a place to organise the knowledge they use.
+
+Commons gives them a shared place to read and write knowledge. The agents can change;
+your organisation keeps its records, evidence and relationships.
+
+## How it works
+
+1. Your agent **searches** for relevant knowledge.
+2. It **reads** the records and evidence it needs.
+3. It uses that knowledge to **do the work**.
+4. It **saves** useful findings for future work.
+
+Another person, agent or fresh session can pick up what you learned. That’s how
+you build an accumulating learning loop around your work.
+
+For example: save a supplier policy, record an approved exception, and link the two.
+The next agent can find the exception and read the policy behind it.
+
+## Three core components
+
+![An agent searches, reads and writes through MCP and the Rust API to PostgreSQL.](/images/commons-core-components.png)
+
+- **PostgreSQL** stores and organises your records, evidence, relationships and search vectors.
+- **The Rust API** gives agents and the browser app consistent access. It exposes the
+  structure of your knowledge and enforces permissions and data rules.
+- **The MCP connector** gives agents three tools to search, read and write through the API.
+
+A local embedding service helps find related text. Your agent supplies its own
+reasoning model; Commons does not need a generative AI provider key.
+
+## Get started
+
+[Set up Commons](/setup), then [connect your agents](/connect).
+Read [Ontology and schema](/ontology) to understand the records and
+[Tools and Skills](/tools) to see how agents use them.
+
+Commons is still being prepared for release. Source access is currently private,
+and installation requires access to the repository. Codex has been tested; Claude
+Code's model-backed onboarding and a complete new-user installation walkthrough remain unfinished.

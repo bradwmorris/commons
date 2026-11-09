@@ -1,0 +1,63 @@
+name: Verify Commons runtime
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/runtime-audit.yml'
+      - 'tests/compose_lifecycle.py'
+      - 'tests/audit_metrics.py'
+      - 'src/**'
+      - 'web/**'
+      - 'migrations/**'
+      - 'Dockerfile'
+      - 'compose.yaml'
+      - 'docker/**'
+      - 'scripts/compose-lifecycle'
+
+concurrency:
+  group: runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.10.0'
+      - name: Reserve space on the disposable hosted runner
+        run: |
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          df -h /
+          # Preinstalled SDKs unused by this Docker/Python/browser lane. Never runs on a self-hosted machine.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+      - name: Install pinned browser tooling
+        run: |
+          npm ci --prefix tests/e2e
+          tests/e2e/node_modules/.bin/playwright install --with-deps chromium
+      - name: Build reviewed source and pinned runtime images
+        run: |
+          docker build -t commons:runtime-check .
+          docker build -f docker/postgres.Dockerfile -t commons-postgres:16.15-vector0.8.1 .
+          # The pinned x86 model image includes large CUDA layers even for CPU use.
+          # Retain the tagged application/DB images; discard only this runner's build cache.
+          docker builder prune --all --force
+          df -h /
+          docker build -f docker/ollama.Dockerfile -t commons-ollama:0.40.5 .
+      - name: Isolated runtime, retrieval, rich evidence and capture recovery
+        run: python3 -u tests/compose_lifecycle.py --app-image commons:runtime-check --verify-retrieval --verify-rich --verify-capture --metrics-output runtime-metrics.json
+      - name: Keep synthetic measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commons-runtime-${{ github.sha }}
+          path: runtime-metrics.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+source scripts/dev-env
+export COMMONS_ORIGIN="${PUBLIC_URL:-http://localhost:${PORT:-3000}}"
+unset COMMONS_PROTECTED_DEMO_USER
+if test -f .commons/protected-demo.json; then
+  COMMONS_PROTECTED_DEMO_USER="$(python3 - <<'PY'
+import json, os, uuid
+from pathlib import Path
+config = json.loads(Path('.commons/protected-demo.json').read_text())
+if config['origin'] != os.environ['COMMONS_ORIGIN'].rstrip('/'):
+    raise SystemExit('Protected demo portal changed; explicitly reconfigure, never silently expose it.')
+print(uuid.UUID(config['user_id']))
+PY
+)"
+  export COMMONS_PROTECTED_DEMO_USER
+fi
+# The DB service may still be starting. This wait does not migrate or reset data.
+for i in $(seq 1 30); do pg_isready -h 127.0.0.1 -p 55432 -q && break; sleep 1; done
+commons_dev_check_database
+exec target/debug/commons serve

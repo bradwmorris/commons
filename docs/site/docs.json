@@ -1,0 +1,29 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Commons",
+  "colors": {
+    "primary": "#37856B",
+    "light": "#67BA99",
+    "dark": "#286B54"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Commons",
+        "pages": [
+          "index",
+          "setup",
+          "connect",
+          "ontology",
+          "tools",
+          "customisation",
+          "inspect"
+        ]
+      }
+    ]
+  }
+}

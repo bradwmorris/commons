@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling==1.33.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "commons-mcp"
+version = "0.1.5"
+description = "Commons product tools over local MCP stdio and authenticated HTTP"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = ["mcp==2.3.0", "httpx==0.28.1"]
+
+[project.scripts]
+commons-mcp = "commons_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["integrations/mcp/commons_mcp", "tools"]
+
+[tool.hatch.build.targets.sdist]
+include = ["integrations/mcp/", "tools/", "pyproject.toml", "uv.lock", "LICENSE", "THIRD_PARTY_NOTICES.md"]
+
+[tool.hatch.build.hooks.custom]
+path = "integrations/mcp/build_hook.py"

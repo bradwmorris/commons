@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+"""Shared, synthetic-only checks. Never connects to an existing PostgreSQL cluster."""
+import argparse
+import contextlib
+import hashlib
+import http.cookiejar
+import json
+import os
+from pathlib import Path
+import secrets
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+import uuid
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parents[2]
+os.chdir(ROOT)
+os.umask(0o077)
+ENV = {k: v for k, v in os.environ.items()
+       if not k.startswith(('PG', 'COMMONS_')) and k != 'DATABASE_URL'}
+ENV['PATH'] = str(Path.home() / '.cargo/bin') + os.pathsep + ENV.get('PATH', '')
+PG = Path('/usr/lib/postgresql/15/bin')
+
+
+def command(args, env=ENV, log=None):
+    print('+ ' + ' '.join(map(str, args)), flush=True)
+    process = subprocess.Popen(list(map(str, args)), env=env, start_new_session=True,
+                               stdout=log, stderr=subprocess.STDOUT if log else None)
+    try:
+        code = process.wait()
+        if code:
+            raise subprocess.CalledProcessError(code, args)
+    except BaseException:
+        # Stop the bounded command's child servers too (not unrelated processes).
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGTERM)
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        raise
+
+
+def check():
+    command(['cargo', 'fmt', '--check'])
+    command(['cargo', 'clippy', '--locked', '--all-targets', '--', '-D', 'warnings'])
+    command(['cargo', 'build', '--locked'])
+    command(['npm', 'ci', '--prefix', 'web'])
+    command(['npm', 'run', 'build', '--prefix', 'web'])
+    command(['npm', 'ci', '--prefix', 'tests/e2e'])
+    command(['node', '--experimental-strip-types', '--test', *sorted((ROOT / 'tests/unit').glob('*.mjs'))])
+    for source in sorted((ROOT / 'tests/e2e').glob('*.mjs')):
+        command(['node', '--check', source])
+    command(['python3', '-B', '-m', 'unittest', 'discover', '-s', 'integrations/capture', '-v'])
+    command(['python3', '-B', '-m', 'unittest', 'discover', '-s', 'integrations/migration', '-v'])
+
+
+def free_port(port=0):
+    with socket.socket() as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('127.0.0.1', port))
+        return sock.getsockname()[1]
+
+
+class Client:
+    def __init__(self, base, token=None, origin=None):
+        self.base, self.token = base, token
+        self.origin = origin or base
+        # Fixtures use the private loopback hop even when a dev portal requires
+        # Secure cookies externally. This cookie policy never reaches a remote host.
+        policy = http.cookiejar.DefaultCookiePolicy(secure_protocols=('https', 'http'))
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar(policy=policy)))
+
+    def call(self, route, body=None):
+        headers = {'Content-Type': 'application/json', 'Origin': self.origin}
+        if self.token:
+            headers['Authorization'] = 'Bearer ' + self.token
+        request = urllib.request.Request(self.base + '/api/' + route, headers=headers,
+            data=None if body is None else json.dumps(body).encode())
+        with self.opener.open(request, timeout=5) as response:
+            return json.load(response)
+
+
+@contextlib.contextmanager
+def server(env, results):
+    with (results / 'server.log').open('ab') as log:
+        process = subprocess.Popen(['target/debug/commons', 'serve'], env=env,
+                                   stdout=log, stderr=log)
+        try:
+            for _ in range(150):
+                if process.poll() is not None:
+                    raise RuntimeError('API exited; inspect server.log')
+                try:
+                    Client(f'http://127.0.0.1:{env["PORT"]}').call('health')
+                    break
+                except (OSError, urllib.error.URLError):
+                    time.sleep(.1)
+            else:
+                raise RuntimeError('API readiness timed out; inspect server.log')
+            yield
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+
+
+def fixture(base, password, origin):
+    admin = Client(base, origin=origin)
+    admin.call('login', {'username': 'alice', 'password': password})
+    alice_id = admin.call('me')['id']
+    bob_id = admin.call('users', {'username': 'bob', 'title': 'Bob Synthetic',
+        'password': password, 'role': 'member'})['id']
+    admin.call('users', {'username': 'reader', 'title': 'Reader Synthetic',
+        'password': password, 'role': 'reader'})
+    bob = Client(base, origin=origin)
+    bob.call('login', {'username': 'bob', 'password': password})
+    agent = bob.call('tokens', {'label': 'Synthetic browser fixture agent',
+                              'write_kinds': ['task', 'note']})
+    return dict(password=password, alice_id=alice_id, bob_id=bob_id, agent=agent)
+
+
+def verify(args):
+    if args.mode == 'retrieval' and args.disposable_model:
+        command([sys.executable, '-B', 'tests/retrieval.py', '--disposable-model', '--model-volume', args.model_volume])
+        return
+    if args.mode == 'verify':
+        from atomic_verify import verify as atomic_verify
+        return atomic_verify(args)
+    if os.geteuid() == 0:
+        raise RuntimeError('Run as an unprivileged user; PostgreSQL initdb refuses root.')
+    if not (PG / 'initdb').is_file():
+        raise RuntimeError('PostgreSQL 15 is required. See docs/testing.md prerequisites.')
+    # The current application-owned HTTP suite deliberately fixes this port/DB.
+    # A busy port is a failure, never permission to use/stop another cluster.
+    try:
+        free_port(55432)
+    except OSError as error:
+        raise RuntimeError('Port 55432 occupied; refusing existing cluster. Stop your own dev service explicitly or use another Orb.') from error
+
+    run_id = uuid.uuid4().hex
+    results = ROOT / 'tests/e2e/results' / run_id
+    results.mkdir(parents=True)
+    summary = {'run_id': run_id, 'mode': args.mode, 'revision': subprocess.check_output(
+        ['git', 'rev-parse', 'HEAD'], text=True).strip(),
+        'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=no'])),
+        'checks_omitted': args.built,
+        'binary_sha256': hashlib.sha256((ROOT / 'target/debug/commons').read_bytes()).hexdigest(),
+        'passed': [], 'status': 'failed', 'cleanup': False,
+        'pending': ['MCP/client compatibility', 'real-client capture completeness',
+                    'source intake and jobs', 'external-agent usability milestone',
+                    'standalone Compose/clean-host install'],
+        'out_of_scope': ['backup/restore']}
+    print(f'Results: {results.relative_to(ROOT)}', flush=True)
+    with tempfile.TemporaryDirectory(prefix='commons-test-') as directory:
+        work = Path(directory)
+        data = work / 'pgdata'
+        password = secrets.token_hex(24)
+        pwfile = work / 'pg-password'
+        pwfile.write_text(password)
+        port = free_port(args.port if args.mode == 'dev' else 0)
+        base = f'http://127.0.0.1:{port}'
+        origin = ENV.get('PUBLIC_URL', base) if args.mode == 'dev' else base
+        env = dict(ENV, PATH=str(PG) + os.pathsep + ENV['PATH'], PGPASSWORD=password,
+            DATABASE_URL=f'postgres://commons:{password}@127.0.0.1:55432/commons',
+            PORT=str(port), COMMONS_ORIGIN=origin.rstrip('/'), COMMONS_ADMIN_USER='alice',
+            COMMONS_ADMIN_NAME='Alice Synthetic', COMMONS_ADMIN_PASSWORD=secrets.token_hex(24))
+        initialized = False
+        try:
+            with (results / 'postgres-init.log').open('w') as log:
+                command([PG / 'initdb', '-D', data, '--username=commons', '--auth-local=trust',
+                         '--auth-host=scram-sha-256', f'--pwfile={pwfile}'], env, log)
+            initialized = True
+            # No fsync/durability flags are disabled. Private Unix socket, loopback TCP.
+            pg_args = [PG / 'pg_ctl', '-D', data, '-l', results / 'postgres.log', '-w',
+                       '-o', f'-h 127.0.0.1 -p 55432 -k {work}']
+            command([*pg_args, 'start'], env)
+            command([PG / 'createdb', '-h', '127.0.0.1', '-p', '55432', '-U', 'commons', 'commons'], env)
+            command(['target/debug/commons', 'migrate'], env)
+            if args.mode == 'retrieval':
+                command(['python3', 'tests/retrieval.py'], dict(env,
+                    COMMONS_TEST_OLLAMA_BINARY=str(Path(args.ollama_binary).resolve()),
+                    COMMONS_TEST_MODEL_CACHE=str(Path(args.model_cache).resolve()),
+                    COMMONS_TEST_RESULTS=str(results)))
+                summary['passed'].append('real CPU EmbeddingGemma 2 retrieval, resources and recovery')
+                summary['status'] = 'passed'
+                return
+            if args.mode == 'verify':
+                command(['cargo', 'test', '--locked'], env)
+                summary['passed'].append('cargo test (see output for actual test count)')
+                command(['python3', 'tests/foundation.py'], env)
+                summary['passed'].append('application-owned HTTP acceptance and API restart')
+            command(['target/debug/commons', 'bootstrap'], env)
+            with server(env, results):
+                fixtures = fixture(base, env['COMMONS_ADMIN_PASSWORD'], env['COMMONS_ORIGIN'])
+                fixture_path = work / 'browser-fixture.json'
+                fixture_path.write_text(json.dumps(fixtures))
+                browser_env = dict(env, COMMONS_TEST_BASE_URL=base, COMMONS_TEST_RUN_ID=run_id,
+                    COMMONS_TEST_FIXTURE=str(fixture_path), COMMONS_TEST_RESULTS=str(results))
+                if args.mode == 'dev':
+                    print(f'Disposable synthetic app listening on port {port}; Ctrl-C/stop service cleans it.', flush=True)
+                    print('Fixture credentials available only in the private temporary fixture file:', fixture_path, flush=True)
+                    while True:
+                        time.sleep(3600)
+                command(['npm', 'test', '--prefix', 'tests/e2e'], browser_env)
+                summary['passed'].append('real Chromium/UI/API journeys')
+                # A dedicated public-API sentinel verifies exact identity, receipt,
+                # evidence, link and Task state across API + whole-Postgres restart.
+                client = Client(base, fixtures['agent']['token'])
+                receipt_body = {'contract_version': 'commons/0.1', 'idempotency_key': run_id,
+                    'operations': [{'op': 'create_object', 'local_ref': 'memory', 'kind': 'memory',
+                        'title': 'Synthetic restart sentinel ' + run_id, 'description': 'Durable, not a backup claim.', 'fields': {}}]}
+                receipt = client.call('apply', receipt_body)
+                oid = receipt['local_refs']['memory']
+                before = client.call('objects/' + oid)
+                identity = client.call('me')
+                objects = client.call('objects')['objects']
+                snapshots = {obj['id']: client.call('objects/' + obj['id']) for obj in objects}
+                eval_tests = {t['id']: client.call('evals/' + t['id']) for t in client.call('evals')['tests']}
+                eval_runs = {r['id']: client.call('eval-runs/' + r['id']) for t in eval_tests.values() for r in t['runs']}
+            # Restart only this disposable API with overlay configs; no live settings.
+            for label, preset, appearance, accent in [
+                ('custom', 'charcoal', '{"accent":"#80CCFF","font":"mono"}', 'rgb(128, 204, 255)'),
+                ('changed', 'blue-slate', '{"accent":"#FFCC80","font":"mono"}', 'rgb(255, 204, 128)'),
+                ('invalid', 'charcoal', '{"foreground":"#08090a"}', ''),
+                ('malformed', 'charcoal', '{broken', ''),
+                ('empty', 'charcoal', '{}', ''),
+            ]:
+                with server(dict(env, COMMONS_THEME=preset, COMMONS_APPEARANCE=appearance), results):
+                    command(['node', 'tests/e2e/appearance-check.mjs'], dict(browser_env,
+                        COMMONS_TEST_APPEARANCE_LABEL=label, COMMONS_TEST_ACCENT=accent))
+            summary['passed'].append('real appearance HTTP/browser configuration and fallback checks')
+            command([PG / 'pg_ctl', '-D', data, '-m', 'fast', '-w', 'stop'], env)
+            command([*pg_args, 'start'], env)
+            with server(env, results):
+                if client.call('me') != identity or client.call('objects/' + oid) != before:
+                    raise AssertionError('Identity or sentinel changed across PostgreSQL restart')
+                if client.call('apply', receipt_body) != receipt:
+                    raise AssertionError('Receipt replay changed after PostgreSQL restart')
+                for object_id, snapshot in snapshots.items():
+                    if client.call('objects/' + object_id) != snapshot:
+                        raise AssertionError('Persisted detail changed across restart: ' + object_id)
+                for test_id, snapshot in eval_tests.items():
+                    if client.call('evals/' + test_id) != snapshot:
+                        raise AssertionError('Eval test/version history changed across restart')
+                for run_id, snapshot in eval_runs.items():
+                    if client.call('eval-runs/' + run_id) != snapshot:
+                        raise AssertionError('Eval run/attempt/file history changed across restart')
+                summary['restart'] = {'sentinel_id': oid, 'detail_count': len(snapshots),
+                                      'identity_and_receipt_unchanged': True}
+            summary['passed'].append('whole PostgreSQL + API restart, exact public state and receipt replay')
+            summary['status'] = 'passed'
+        except (KeyboardInterrupt, SystemExit):
+            if args.mode == 'dev':
+                summary['status'] = 'stopped'
+            raise
+        finally:
+            try:
+                if initialized:
+                    # pg_ctl targets only this run's generated directory, never a PID/cluster from env.
+                    subprocess.run([str(PG / 'pg_ctl'), '-D', str(data), '-m', 'immediate', '-w', 'stop'],
+                                   env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                    if (data / 'postmaster.pid').exists():
+                        summary['status'] = 'failed'
+                        raise RuntimeError('Disposable PostgreSQL did not stop; preserving diagnostic failure.')
+                summary['cleanup'] = True
+            finally:
+                (results / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+                print(json.dumps(summary, indent=2), flush=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('mode', choices=['check', 'verify', 'dev', 'retrieval'])
+    parser.add_argument('--app-image', help='Atomic-schema verify: explicit packaged candidate image; otherwise build an isolated image')
+    parser.add_argument('--ollama-binary', help='Retrieval acceptance: pinned Ollama 0.40.5 executable')
+    parser.add_argument('--model-cache', help='Retrieval acceptance: pre-provisioned pinned model cache')
+    parser.add_argument('--disposable-model', action='store_true', help='Retrieval: isolated Docker PG/model with an explicit read-only cache volume')
+    parser.add_argument('--model-volume', help='Explicit existing pinned-model volume, copied read-only into disposable model storage')
+    parser.add_argument('--built', action='store_true', help='Explicitly reuse built files; omits check/build (diagnostic, not full verification).')
+    parser.add_argument('--port', type=int, default=int(ENV.get('PORT', '3001')), help='Disposable dev API port only (default PORT or 3001).')
+    args = parser.parse_args()
+    if args.mode == 'retrieval' and args.disposable_model and not args.model_volume:
+        parser.error('--disposable-model requires --model-volume')
+    if args.mode == 'retrieval' and not args.disposable_model and (not args.ollama_binary or not args.model_cache):
+        parser.error('retrieval requires --ollama-binary and --model-cache; missing real model is not a skip')
+    if args.mode == 'check' and args.built:
+        parser.error('check --built would execute nothing; omit --built')
+    if not args.built:
+        check()
+    if args.mode != 'check':
+        verify(args)
+
+
+if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except (subprocess.CalledProcessError, OSError, RuntimeError, AssertionError) as error:
+        # Never print environment variables, fixture bodies or token-bearing HTTP responses.
+        print(f'FAIL: {type(error).__name__}: {error}', file=sys.stderr)
+        sys.exit(1)

@@ -1,0 +1,83 @@
+---
+title: "Tools and Skills"
+description: "Three tools for shared knowledge. Skills for how to use them."
+---
+
+People use different agents for different work. Commons gives those agents the
+same three tools, exposed through MCP, so they can build on shared knowledge.
+
+The loop is simple: **search, read, do the work, then save what is useful**.
+Another agent can pick up the findings later.
+
+## The three tools
+
+| Tool | What it does |
+| --- | --- |
+| `commons_search` | Finds relevant records and evidence |
+| `commons_read` | Opens selected records, evidence or history |
+| `commons_write` | Creates, updates and connects records |
+
+The API checks permissions and revisions for every change.
+
+## Search and read
+
+The agent decides what to search for. It reads what it finds, follows connections,
+and searches again if it needs to.
+
+For example, you might ask about “AI fixing another model without retraining”
+while a relevant Source is titled “From agentic search to weight-space programming.”
+Semantic search helps bridge that gap. Hybrid search combines matches by meaning
+with keyword matches.
+
+Here’s an example tool query:
+
+```json
+{"query":"AI fixing another model without retraining","scope":"all","limit":5}
+```
+
+Use `artifacts` or `all` instead of `objects` when you need to search original
+source text. Check the result's search mode: keyword-only results are labelled
+when semantic search is unavailable.
+
+Search returns candidates. Use `commons_read` to open the records you need and
+follow their evidence. Open linked records explicitly when their full content matters.
+
+Long Artifact reads are paged. Follow `next_offset` for the next text window.
+For corrected evidence, use the returned read instructions to open the right version.
+
+## Write and check
+
+The same agent can save what it learns as it works. It can record a finding in a
+Note, link it to the Source, and reopen both to check what was saved.
+
+1. Look for an existing record before creating another.
+2. Keep the Object concise and preserve long original material in an Artifact.
+3. Validate the write with `execute:false`.
+4. Save the same operations with `execute:true`.
+5. Read back the result and check its content, links and writer.
+
+Use current revisions when updating or connecting records. Create records before
+linking them, and use the returned IDs. New Tasks need an active owner and a due
+date with a timezone.
+
+If a write times out, its outcome may be unknown. Read back before retrying and
+preserve the original request and retry key. A conflicting revision means the
+record changed; read the current version before deciding what to do.
+
+## What skills add
+
+A tool provides an action. A skill gives the agent a repeatable way to use it.
+
+For example, a research skill might tell the agent to find an existing Source,
+keep the original text, write a useful Note and connect it to the evidence.
+
+Keep skills short and specific to the work. Check whether they help on real tasks.
+They do not grant extra permissions, and not every task needs a knowledge write.
+
+## Optional knowledge curation
+
+Agents can save findings while they work. You can also build a separate worker to
+review captured activity and maintain knowledge. Commons does not currently bundle
+that worker; its model, schedule and operating setup would be yours to provide.
+
+Exact tool operations and request fields are in `docs/foundation-api.md` in the repository.

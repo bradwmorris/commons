@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="650" viewBox="0 0 1280 650" role="img" aria-labelledby="title desc"><title id="title">Read. Work. Write. Reuse.</title><desc id="desc">An agent searches for existing knowledge, reads selected records and evidence, does its work, and writes useful findings when appropriate. Later work can reuse those records through the same tools. All database access goes through the Commons API.</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#37856B" /></marker></defs><rect width="1280" height="650" fill="white" />
+<text x="48" y="55" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#16392E" text-anchor="start">Read. Work. Write. Reuse.</text>
+<text x="48" y="88" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#53675F" text-anchor="start">Three tools let different agents build on shared knowledge.</text>
+<rect x="48" y="176" width="278" height="140" rx="14" fill="#F0F7F3" stroke="#37856B" stroke-width="2" />
+<text x="70" y="211" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">1  Search</text>
+<text x="70" y="242" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">commons_search</text>
+<text x="70" y="267" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Find relevant knowledge</text>
+<rect x="350" y="176" width="278" height="140" rx="14" fill="#F0F7F3" stroke="#37856B" stroke-width="2" />
+<text x="372" y="211" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">2  Read</text>
+<text x="372" y="242" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">commons_read</text>
+<text x="372" y="267" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Open records and evidence</text>
+<rect x="652" y="176" width="278" height="140" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="674" y="211" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">3  Do the work</text>
+<text x="674" y="242" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Your agent + its other tools</text>
+<text x="674" y="267" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Use what it learned</text>
+<rect x="954" y="176" width="278" height="140" rx="14" fill="#F0F7F3" stroke="#37856B" stroke-width="2" />
+<text x="976" y="211" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">4  Write</text>
+<text x="976" y="242" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">commons_write</text>
+<text x="976" y="267" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Save useful findings</text>
+<path d="M 326 246 H 350" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<path d="M 628 246 H 652" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<path d="M 930 246 H 954" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<path d="M 1093 316 V 370 H 187 V 316" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<text x="640" y="405" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#37856B" text-anchor="middle">Later work can reuse the findings — with another agent or a fresh session.</text>
+<rect x="350" y="460" width="580" height="98" rx="14" fill="#F0F7F3" stroke="#37856B" stroke-width="2" />
+<text x="372" y="495" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">Shared Commons knowledge</text>
+<text x="372" y="526" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Accessed through the Commons API; stored in PostgreSQL</text>
+<text x="640" y="608" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" fill="#53675F" text-anchor="middle">Write when there is something useful to retain. Verify what was saved.</text>
+<polygon points="350,246 340,250.5 340,241.5" fill="#37856B" /><polygon points="652,246 642,250.5 642,241.5" fill="#37856B" /><polygon points="954,246 944,250.5 944,241.5" fill="#37856B" /><polygon points="187,316 191.5,326 182.5,326" fill="#37856B" /></svg>

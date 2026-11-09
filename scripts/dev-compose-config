@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Generates local secrets once; does NOT start Docker, migrate, or bootstrap.
+set -euo pipefail
+exec "$(dirname "$0")/compose-lifecycle" init "$@"

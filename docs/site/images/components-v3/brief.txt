@@ -1,0 +1,2 @@
+Revision of the approved Commons components diagram: replace generic agent marks with Claude Code, Codex, Hermes and Pi artwork; use four cards. Preserve dark palette, people, own-agent boundaries, API and shared PostgreSQL knowledge. Keep original brand colours. Sources and licence notices are in brand-icons/.
+Editable vector: commons-components-v3.svg. Generate with python3 render.py, then sips -s format png commons-components-v3.svg --out commons-components-v3.png.

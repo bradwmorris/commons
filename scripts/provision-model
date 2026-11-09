@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Downloads only the selected immutable CPU artifact; never calls a hosted model.
+set -euo pipefail
+root="${OLLAMA_MODELS:?Set OLLAMA_MODELS to the persistent model cache}"
+mkdir -p "$root/blobs" "$root/manifests/registry.ollama.ai/library/embeddinggemma-2"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+fetch() {
+  local url="$1" hash="$2" destination="$3"
+  if test -f "$destination" && echo "$hash  $destination" | sha256sum -c - >/dev/null 2>&1; then return; fi
+  curl --proto '=https' --tlsv1.2 -fL --retry 2 "$url" -o "$work/download"
+  echo "$hash  $work/download" | sha256sum -c -
+  install -m 644 "$work/download" "$destination.tmp"
+  mv "$destination.tmp" "$destination"
+}
+registry=https://registry.ollama.ai/v2/library/embeddinggemma-2
+for hash in 111e84992a0406bacb70d11dddd8874001c783cc56b82c462ec82a2f5b8d08b1 bee15587bacd25fd66b558cca24a3806313c43da235226d779b78f3fdccfc87b; do
+  fetch "$registry/blobs/sha256:$hash" "$hash" "$root/blobs/sha256-$hash"
+done
+fetch "$registry/manifests/270m-q8_0-text" \
+  c21dd30c1e38444d3b4faa091407b6fa97221447b4965d74931d43d7f09bbbfd \
+  "$root/manifests/registry.ollama.ai/library/embeddinggemma-2/270m-q8_0-text"
+echo 'Pinned EmbeddingGemma 2 text-only Q8_0 cache verified. Provisioning complete.'

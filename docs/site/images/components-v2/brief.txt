@@ -1,0 +1,7 @@
+Purpose: show multiple people using their own agents while Commons remains a separate shared system.
+Style: Centaur control-and-context reference; dark background, simple precise line icons, flat fills, restrained green with blue for storage. Minimal labels. No gradients, glow or decorative illustration.
+Relationships: person -> agent; each agent owns its model/harness/tools and local MCP connector; Search/Read/Write reach the Commons API; API reaches PostgreSQL. Bidirectional access. Shared knowledge is outside the agents.
+Generic icons drawn for this diagram; no vendor marks used. Logos can be added where they identify a meaningful product choice.
+Editable source: commons-components-v2.svg. Reproduce with python3 render.py, then sips -s format png commons-components-v2.svg --out commons-components-v2.png.
+Alt: People bring their own agents. Through MCP search, read and write tools, they use a shared Commons API and PostgreSQL database outside the agents.
+Status: first style/composition draft; not published.

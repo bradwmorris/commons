@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="870" viewBox="0 0 1280 870" role="img" aria-labelledby="title desc"><title id="title">One core record. Connected information.</title><desc id="desc">Objects are atomic knowledge records. Connections can link Objects, Users, Artifacts and Traces. Five supporting tables store credentials, changes, request receipts, trace items and derived search chunks. This conceptual view omits other foreign keys.</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#37856B" /></marker></defs><rect width="1280" height="870" fill="white" />
+<text x="48" y="55" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#16392E" text-anchor="start">One core record. Connected information.</text>
+<text x="48" y="88" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#53675F" text-anchor="start">PostgreSQL stores the records and the relationships between them.</text>
+<rect x="330" y="122" width="620" height="134" rx="14" fill="#F0F7F3" stroke="#37856B" stroke-width="2" />
+<text x="352" y="157" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">objects</text>
+<text x="352" y="188" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Atomic units of information</text>
+<text x="352" y="213" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Task · Note · Entity · Source · Theme · Event · Thread</text>
+<rect x="48" y="317" width="300" height="110" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="70" y="352" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">users</text>
+<text x="70" y="383" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Human and agent identities</text>
+<text x="70" y="408" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Separate from Objects</text>
+<rect x="932" y="317" width="300" height="110" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="954" y="352" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">artifacts</text>
+<text x="954" y="383" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Original text and files</text>
+<text x="954" y="408" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Separate from Objects</text>
+<rect x="438" y="317" width="404" height="110" rx="14" fill="#F0F7F3" stroke="#37856B" stroke-width="2" />
+<text x="460" y="352" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">connections</text>
+<text x="460" y="383" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Typed, explained relationships</text>
+<text x="460" y="408" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">One endpoint on each side</text>
+<rect x="438" y="490" width="404" height="110" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="460" y="525" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">traces</text>
+<text x="460" y="556" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Observed execution records</text>
+<text x="460" y="581" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Separate from Thread Objects</text>
+<path d="M 640 256 V 317" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<path d="M 348 372 H 438" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<path d="M 842 372 H 932" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<path d="M 640 427 V 490" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<text x="640" y="640" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" fill="#16392E" text-anchor="middle">Supporting tables</text>
+<rect x="48" y="664" width="224" height="112" rx="12" fill="#F0F7F3" />
+<text x="63" y="695" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#16392E" text-anchor="start">credentials</text>
+<text x="63" y="724" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">Sessions + tokens</text>
+<text x="63" y="748" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">→ users</text>
+<rect x="288" y="664" width="224" height="112" rx="12" fill="#F0F7F3" />
+<text x="303" y="695" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#16392E" text-anchor="start">changes</text>
+<text x="303" y="724" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">Mutation history</text>
+<text x="303" y="748" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">→ records + actors</text>
+<rect x="528" y="664" width="224" height="112" rx="12" fill="#F0F7F3" />
+<text x="543" y="695" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#16392E" text-anchor="start">request_receipts</text>
+<text x="543" y="724" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">Write retry results</text>
+<text x="543" y="748" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">→ caller / Thread</text>
+<rect x="768" y="664" width="224" height="112" rx="12" fill="#F0F7F3" />
+<text x="783" y="695" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#16392E" text-anchor="start">trace_items</text>
+<text x="783" y="724" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">Messages + steps</text>
+<text x="783" y="748" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">→ Thread / Trace</text>
+<rect x="1008" y="664" width="224" height="112" rx="12" fill="#F0F7F3" />
+<text x="1023" y="695" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#16392E" text-anchor="start">chunks</text>
+<text x="1023" y="724" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">Derived search data</text>
+<text x="1023" y="748" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53675F" text-anchor="start">→ Object / Artifact</text>
+<text x="640" y="819" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="middle">Core relationship view: Connections link Objects, Users, Artifacts and Traces.</text>
+<text x="640" y="846" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" fill="#53675F" text-anchor="middle">Direct ownership and other foreign keys are omitted here.</text>
+</svg>

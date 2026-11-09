@@ -1,0 +1,164 @@
+---
+title: "Connect your agents"
+description: "Connect Codex, Pi, Amp or Claude Code to Commons."
+---
+
+Choose [Codex](#codex), [Pi](#pi), [Amp](#amp) or [Claude Code](#claude-code).
+
+MCP gives your agent tools to search, read and write Commons. Set that up first.
+Optional capture saves visible messages and tool activity in **Threads**. Optional
+native traces show timed operations reported by the client. Capture and traces
+need their own setup. Everyone signed in to your Commons can read saved activity.
+
+## Before you start
+
+1. [Set up Commons](/setup) and sign in. In **Access**, create a named agent and
+   issue it a credential. Give it **Note** write access to run the check below.
+2. On the computer that runs the agent, install Python 3.11+ and
+   [uv](https://docs.astral.sh/uv/getting-started/installation/). Get the reviewed
+   Commons checkout from your administrator. Open a terminal in that checkout and run:
+
+   ```sh
+   uv tool install .
+   commons-mcp --version
+   command -v commons-mcp
+   ```
+
+   Copy the absolute path printed by the last command. If the terminal cannot find
+   it, run `uv tool update-shell` and reopen the terminal. The guide uses
+   connector version 0.1.5 with Commons schema 12.
+3. In the terminal that will launch your agent, set the Commons origin and load
+   the credential from a private file readable only by you. Replace both examples.
+   Use HTTPS, or loopback HTTP for a local test.
+
+   ```sh
+   export COMMONS_URL=https://commons.example
+   export COMMONS_TOKEN="$(cat /absolute/private/commons-token)"
+   ```
+
+   Keep the credential out of prompts, Git and command arguments. Each agent
+   needs its own credential and a working sign-in to its model provider.
+
+For testing, use an empty Commons installation. Check the client executable,
+launcher scripts and loaded plugins before sending a prompt. An existing launcher
+can replace your test settings. A new project folder can still load account-wide
+plugins. Use a separate test profile if your usual profile has live access or capture.
+
+The client starts `commons-mcp` on its own machine. The connector talks to the
+shared Commons API. Optional plugins and capture processes also run separately
+from the Commons server image.
+
+## Codex
+
+1. Install and sign in to the [Codex CLI](https://learn.chatgpt.com/docs/quickstart).
+2. Open `~/.codex/config.toml`. Add this entry or update the existing `commons`
+   entry. Replace the command path.
+
+   ```toml
+   [mcp_servers.commons]
+   command = "/absolute/path/to/commons-mcp"
+   env_vars = ["COMMONS_URL", "COMMONS_TOKEN"]
+   ```
+
+3. In the same terminal where you set the variables, start `codex` and enter
+   `/mcp`. Look for the three Commons tools. Approve the test calls when asked.
+   If the connection fails, check the path and relaunch from that terminal.
+   An already-running desktop app has its own launch environment.
+
+**Optional capture.** In your Commons checkout, open
+`docs/connect/automatic-capture.md` and follow the host setup. Run the scanner
+with `--provider codex`. For native spans, also open `docs/telemetry.md` and
+configure the local receiver. Check that the saved native trace links to the same
+Thread.
+
+## Pi
+
+1. Install [Pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent)
+   and configure its model provider. Use a Pi release with `pi mcp` (tested on
+   1.5.0). Follow the package's Node.js requirements.
+2. In the terminal where you set the variables, run:
+
+   ```sh
+   pi mcp add commons --exposure direct -- /absolute/path/to/commons-mcp
+   pi mcp list
+   pi
+   ```
+
+   The list should show a connected server with three tools. In an open Pi
+   session, use `/reload`, then `/mcp`. Leave built-in extensions enabled so Pi
+   can load its MCP support.
+
+**Optional capture.** In your Commons checkout, open `docs/connect/pi-capture.md`
+and follow the extension setup.
+Check the saved Thread and its matching `pi-events` execution under **Traces →
+Other executions**. This extension records Pi tool events. Native spans require
+a separate integration.
+
+## Amp
+
+1. Install the [Amp CLI](https://ampcode.com/docs/cli) and sign in.
+   Run `amp --version`. If it says the native binary is missing, follow Amp's
+   installation instructions for your platform.
+2. In the terminal where you set the variables, run:
+
+   ```sh
+   amp mcp add commons -- /absolute/path/to/commons-mcp
+   amp mcp doctor commons
+   amp --executor local
+   ```
+
+   Expect `connected (3 tools)`. Ask Amp to use the tools from the server named
+   `commons`. If another Commons plugin is installed, check which server Amp calls
+   before letting it write.
+
+An Orb runs on a different machine. The local executable, environment and
+loopback address above belong to your computer. Orb MCP onboarding is unverified.
+
+**Optional capture.** In your Commons checkout, open
+`docs/connect/automatic-capture.md`. The host scanner reads eligible Amp exports,
+which can include Orbs, and saves visible tool activity in Threads. Local Amp
+capture still needs an isolated test. Commons has no Amp native span adapter.
+
+## Claude Code
+
+1. Install [Claude Code](https://code.claude.com/docs/en/quickstart) and sign in.
+2. In the terminal where you set the variables, go to the folder you work in
+   and run:
+
+   ```sh
+   claude mcp add --scope local --transport stdio commons -- /absolute/path/to/commons-mcp
+   claude mcp list
+   claude
+   ```
+
+   Expect `Connected` in the list. Enter `/mcp` in Claude Code to inspect the
+   connection. If it connects but Claude returns a provider 401, check your
+   Claude sign-in separately. Connector discovery passed on 2.1.152. The provider
+   rejected the test account's OAuth token before search, read or write could run.
+
+**Optional capture.** Commons has no Claude Code capture or trace adapter.
+Anthropic documents [hooks and transcript access](https://code.claude.com/docs/en/hooks)
+and a [beta native span exporter](https://code.claude.com/docs/en/monitoring-usage#traces-beta).
+The test steps for those interfaces are in `docs/connect/clients.md` in your checkout.
+
+## Check MCP access
+
+1. In your agent, ask it to use `commons_search` to find a test Source. Ask it to
+   use `commons_read` to open the Source and its Artifact and quote a known line.
+2. Ask it to use `commons_write` to validate and then save a test Note with intent
+   `fact`. Ask it to reopen the Note by ID. In Commons, check the text and writer.
+3. If you opted into capture, start a new synthetic turn, route it as business and
+   use a tool. In **Threads**, check the prompt, reply, tool call/result and
+   speakers. Check the linked execution or native trace if the client supplies one.
+   A successful MCP call alone does not enable either.
+
+| If you see | Check |
+| --- | --- |
+| Server missing or disconnected | Run `commons-mcp --version`. Confirm the client inherits both variables and restart it. |
+| Commons 401 or 403 | Check the origin and credential in **Access**. For a write, check its scope. |
+| Conflict or interrupted save | Read the current record and reconcile before retrying. Keep the original request and retry key. |
+| No Thread | Check activation, the route on this turn and delivery status. |
+| Thread with no native trace | Check that your client supports native traces, the exporter is running and the trace matches this turn. |
+
+To disconnect MCP, remove only the `commons` server entry and restart the client.
+Use the capture guide's disable step separately. Saved Threads remain in Commons.

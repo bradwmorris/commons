@@ -1,0 +1,348 @@
+import { WorkspaceToolbar } from "./WorkspaceToolbar";
+import { FormEvent, PointerEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "./api";
+import { layoutConnectionGraph } from "./connectionGraphLayout";
+import type { PositionedGraphEdge, PositionedGraphNode } from "./connectionGraphLayout";
+import { ObjectTypeBadge } from "./RecordVisuals";
+import { connectionPath, connectionsPath, interceptNavigation, navigate, objectPath } from "./routing";
+import type { ConnectionGraphSnapshot } from "./types";
+
+type Selection = { type: "node" | "edge"; id: string } | null;
+interface Transform { x: number; y: number; scale: number }
+interface DragState { pointerId: number; clientX: number; clientY: number; x: number; y: number }
+
+const initialTransform: Transform = { x: 0, y: 0, scale: 1 };
+
+export function ConnectionGraphWorkspace({ refreshKey = 0 }: { refreshKey?: number }) {
+  const [graph, setGraph] = useState<ConnectionGraphSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [selection, setSelection] = useState<Selection>(null);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [transform, setTransform] = useState<Transform>(initialTransform);
+  const drag = useRef<DragState | null>(null);
+  const loadGeneration = useRef(0);
+  const reading = useRef<AbortController | null>(null);
+
+  const load = useCallback((previous?: ConnectionGraphSnapshot) => {
+    reading.current?.abort();
+    const controller = new AbortController(); reading.current = controller;
+    const generation = ++loadGeneration.current;
+    setLoading(true);
+    setError(null);
+    void api.connectionGraph(undefined, controller.signal, previous)
+      .then((snapshot) => {
+        if (controller.signal.aborted || generation !== loadGeneration.current) return;
+        setGraph(snapshot);
+        setSelection((current) => {
+          if (selectionExists(current, snapshot)) return current;
+          const requestedObject = new URLSearchParams(window.location.search).get("object");
+          return requestedObject && snapshot.nodes.some((node) => node.id === requestedObject)
+            ? { type: "node", id: requestedObject }
+            : null;
+        });
+      })
+      .catch((cause) => { if (!controller.signal.aborted && generation === loadGeneration.current) setError(cause instanceof Error ? cause.message : "The graph could not be loaded."); })
+      .finally(() => { if (!controller.signal.aborted && generation === loadGeneration.current) setLoading(false); });
+  }, []);
+  useEffect(() => { load(); return () => reading.current?.abort(); }, [load, refreshKey]);
+
+  const layout = useMemo(
+    () => layoutConnectionGraph(graph?.nodes ?? [], graph?.edges ?? []),
+    [graph],
+  );
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const matches = useMemo(() => new Set(layout.nodes
+    .filter((node) => normalizedQuery && `${node.title} ${node.kind} ${node.id}`.toLocaleLowerCase().includes(normalizedQuery))
+    .map((node) => node.id)), [layout.nodes, normalizedQuery]);
+  const selectedNode = selection?.type === "node" ? layout.nodes.find((node) => node.id === selection.id) ?? null : null;
+  const selectedEdge = selection?.type === "edge" ? layout.edges.find((edge) => edge.id === selection.id) ?? null : null;
+  const incidentIds = useMemo(() => new Set(selectedNode ? layout.edges
+    .filter((edge) => edge.source.id === selectedNode.id || edge.target.id === selectedNode.id)
+    .flatMap((edge) => [edge.id, edge.source.id, edge.target.id]) : []), [layout.edges, selectedNode]);
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const match = [...layout.nodes]
+      .filter((node) => matches.has(node.id))
+      .sort((left, right) => searchRank(left, normalizedQuery) - searchRank(right, normalizedQuery) || right.degree - left.degree || left.title.localeCompare(right.title))[0];
+    if (match) setSelection({ type: "node", id: match.id });
+  };
+  const zoom = (factor: number) => setTransform((current) => {
+    const scale = clamp(current.scale * factor, 0.35, 3.2);
+    const ratio = scale / current.scale;
+    return {
+      scale,
+      x: layout.width / 2 - (layout.width / 2 - current.x) * ratio,
+      y: layout.height / 2 - (layout.height / 2 - current.y) * ratio,
+    };
+  });
+  const onWheel = (event: WheelEvent<SVGSVGElement>) => {
+    event.preventDefault();
+    zoom(event.deltaY > 0 ? 0.9 : 1.1);
+  };
+  const startPan = (event: PointerEvent<SVGSVGElement>) => {
+    if (event.target !== event.currentTarget) return;
+    drag.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, x: transform.x, y: transform.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelection(null);
+  };
+  const movePan = (event: PointerEvent<SVGSVGElement>) => {
+    if (!drag.current || drag.current.pointerId !== event.pointerId) return;
+    const scaleX = layout.width / Math.max(1, event.currentTarget.clientWidth);
+    const scaleY = layout.height / Math.max(1, event.currentTarget.clientHeight);
+    setTransform((current) => ({
+      ...current,
+      x: drag.current!.x + (event.clientX - drag.current!.clientX) * scaleX,
+      y: drag.current!.y + (event.clientY - drag.current!.clientY) * scaleY,
+    }));
+  };
+  const endPan = (event: PointerEvent<SVGSVGElement>) => {
+    if (drag.current?.pointerId === event.pointerId) drag.current = null;
+  };
+
+  if (loading && !graph) return <div className="connection-graph-blank">Mapping Objects and Connections…</div>;
+  if (error && !graph) return <div className="connection-graph-blank error"><p>{error}</p><button className="secondary" onClick={() => load()}>Try again</button></div>;
+
+  return <section className="connection-graph-workspace" aria-label="Connections graph">
+    <WorkspaceToolbar className="connection-graph-toolbar">
+      <div>
+        <p>{graph?.node_count ?? 0} Objects · {graph?.connection_count ?? 0} Connections · {layout.componentCount} clusters</p>
+      </div>
+      <form className="connection-graph-search" onSubmit={submitSearch} role="search">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25" /><path d="m10.25 10.25 3 3" /></svg>
+        <input aria-label="Search graph Objects" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find an Object" />
+        {normalizedQuery && <span aria-live="polite">{matches.size}</span>}
+        {normalizedQuery && <button type="submit">Focus</button>}
+      </form>
+      <div className="connection-graph-controls" aria-label="Graph controls">
+        <button type="button" onClick={() => zoom(0.82)} aria-label="Zoom out">−</button>
+        <button type="button" onClick={() => setTransform(initialTransform)}>Fit</button>
+        <button type="button" onClick={() => zoom(1.22)} aria-label="Zoom in">+</button>
+
+      </div>
+    </WorkspaceToolbar>
+
+    {graph && (graph.continuation.objects !== null || graph.continuation.connections !== null) && <div className="connection-graph-notice" role="status"><span>Partial map: {graph.node_count} Objects and {graph.connection_count} of {graph.total_connections} Connections loaded. Search and clusters cover this map only.</span><button disabled={loading} onClick={() => load(graph)}>{loading ? "Loading…" : "Load more map"}</button></div>}
+    {error && <div className="connection-graph-notice">{error}<button onClick={() => load()}>Retry</button></div>}
+    {layout.nodes.length === 0 ? <div className="connection-graph-blank">No active Objects yet.</div> : <div className="connection-graph-body">
+      <div className="connection-graph-canvas">
+        <svg
+          viewBox={`0 0 ${layout.width} ${layout.height}`}
+          role="img"
+          aria-label={`Connection map with ${layout.nodes.length} Objects, ${layout.edges.length} Connections, and ${layout.componentCount} connected clusters.`}
+          onWheel={onWheel}
+          onPointerDown={startPan}
+          onPointerMove={movePan}
+          onPointerUp={endPan}
+          onPointerCancel={endPan}
+          onKeyDown={(event) => { if (event.key === "Escape") setSelection(null); }}
+        >
+          <defs>
+            <marker id="connection-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker>
+          </defs>
+          <g transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}>
+            <g className="connection-graph-edges">
+              {layout.edges.map((edge) => <GraphEdge
+                key={edge.id}
+                edge={edge}
+                active={!selectedNode || incidentIds.has(edge.id)}
+                selected={selectedEdge?.id === edge.id}
+                keyboardEnabled={Boolean(selectedNode && incidentIds.has(edge.id))}
+                onSelect={() => setSelection({ type: "edge", id: edge.id })}
+              />)}
+            </g>
+            <g className="connection-graph-nodes">
+              {layout.nodes.map((node) => <GraphNode
+                key={node.id}
+                node={node}
+                matched={!normalizedQuery || matches.has(node.id)}
+                active={!selectedNode || incidentIds.has(node.id)}
+                selected={selectedNode?.id === node.id}
+                hovered={hoveredNode === node.id}
+                onHover={setHoveredNode}
+                onSelect={() => setSelection({ type: "node", id: node.id })}
+              />)}
+            </g>
+          </g>
+        </svg>
+        <p className="connection-graph-hint">Scroll to zoom · drag empty space to pan · Escape clears focus</p>
+      </div>
+      <GraphInspector
+        node={selectedNode}
+        edge={selectedEdge}
+        onSelectNode={(id) => setSelection({ type: "node", id })}
+      />
+    </div>}
+    <MobileGraphList nodes={layout.nodes} onSelect={(id) => setSelection({ type: "node", id })} />
+  </section>;
+}
+
+export function FocusedObjectGraph({ objectId, objectTitle, refreshKey = 0, suppliedGraph }: { objectId: string; objectTitle: string; refreshKey?: number; suppliedGraph?: ConnectionGraphSnapshot }) {
+  const [graph, setGraph] = useState<ConnectionGraphSnapshot | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    if (suppliedGraph) { setGraph(suppliedGraph); setError(null); return; }
+    const controller = new AbortController();
+    setError(null);
+    void api.connectionGraph(objectId, controller.signal)
+      .then((snapshot) => { if (!controller.signal.aborted) setGraph(snapshot); })
+      .catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "The Connection map could not be loaded."); });
+    return () => controller.abort();
+  }, [objectId, refreshKey, suppliedGraph]);
+
+  useEffect(() => setZoom(1), [objectId]);
+
+  const neighbourhood = useMemo(() => {
+    if (!graph) return null;
+    const edges = graph.edges.filter((edge) => edge.source_object_id === objectId || edge.target_object_id === objectId);
+    const ids = new Set([objectId]);
+    for (const edge of edges) {
+      ids.add(edge.source_object_id);
+      ids.add(edge.target_object_id);
+    }
+    const layout = layoutConnectionGraph(graph.nodes.filter((node) => ids.has(node.id)), edges);
+    // A focused neighbourhood is a star, not the full organisation graph. Keep
+    // small maps compact and labelled instead of shrinking the force layout.
+    if (suppliedGraph && layout.nodes.length <= 12) {
+      const neighbours = layout.nodes.filter(node => node.id !== objectId);
+      const height = Math.max(0, (neighbours.length - 1) * 38);
+      const centerY = height / 2 + (neighbours.length % 2 ? 19 : 0);
+      const positions = new Map(layout.nodes.map(node => [node.id, node.id === objectId
+        ? { ...node, x: 35, y: centerY, radius: 8, prominent: true }
+        : { ...node, x: 210, y: neighbours.findIndex(other => other.id === node.id) * 38, radius: 6, prominent: true }]));
+      return { ...layout, nodes: [...positions.values()], edges: layout.edges.map(edge => ({ ...edge, source: positions.get(edge.source.id)!, target: positions.get(edge.target.id)! })) };
+    }
+    return layout;
+  }, [graph, objectId, suppliedGraph]);
+  const fullGraphPath = connectionsPath(objectId);
+  const viewBox = neighbourhood && neighbourhood.nodes.length > 0 ? focusedViewBox(neighbourhood.nodes, zoom) : "0 0 900 600";
+
+  return <section className="detail-section focused-object-graph-section" aria-label={`Connection map for ${objectTitle}`}>
+    <header><h3>Connection map</h3>{!suppliedGraph && <a className="text-button" href={fullGraphPath} onClick={(event) => interceptNavigation(event, fullGraphPath)}>Open in Connections</a>}</header>
+    {graph && graph.continuation.connections !== null && <p role="status">Showing {graph.connection_count} of {graph.total_connections} direct Connections. Open in Connections to explore more.</p>}
+    {error ? <div className="focused-graph-state error">{error}</div> : !neighbourhood ? <div className="focused-graph-state">Loading Connection map…</div> : neighbourhood.nodes.length === 0 ? <div className="focused-graph-state">This Object is not present in the active Connection graph.</div> : <div className="focused-object-graph">
+      <div className="focused-graph-controls" role="group" aria-label="Focused graph controls"><button type="button" onClick={() => setZoom((value) => clamp(value / 1.25, 0.55, 2.5))} aria-label="Zoom out focused graph">−</button><button type="button" onClick={() => setZoom(1)}>Fit</button><button type="button" onClick={() => setZoom((value) => clamp(value * 1.25, 0.55, 2.5))} aria-label="Zoom in focused graph">+</button></div>
+      <svg viewBox={viewBox} role="img" aria-label={`${objectTitle} with ${neighbourhood.nodes.length - 1} related records and ${neighbourhood.edges.length} ${suppliedGraph ? "relationships" : "direct Connections"}`}>
+        <defs><marker id="focused-connection-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>
+        <g className="connection-graph-edges">{neighbourhood.edges.map((edge) => <GraphEdge key={edge.id} edge={edge} active selected={false} keyboardEnabled onSelect={() => navigate(edge.reference ? (edge.target.href ?? objectPath(edge.target.id)) : connectionPath(edge.id))} markerId="focused-connection-arrow" />)}</g>
+        <g className="connection-graph-nodes">{neighbourhood.nodes.map((node) => <GraphNode key={node.id} node={node} matched active selected={node.id === objectId} hovered={hoveredNode === node.id} onHover={setHoveredNode} onSelect={() => navigate(objectPath(node.id))} href={node.href ?? objectPath(node.id)} />)}</g>
+      </svg>
+      <p>{neighbourhood.edges.length} {suppliedGraph ? "displayed relationships" : "direct Connections"} · select a node or line to open it</p>
+    </div>}
+  </section>;
+}
+
+function focusedViewBox(nodes: PositionedGraphNode[], zoom: number): string {
+  const measure = document.createElement("canvas").getContext("2d")!;
+  measure.font = `520 10px ${getComputedStyle(document.body).fontFamily}`;
+  const left = Math.min(...nodes.map((node) => node.x - node.radius)) - 70;
+  const right = Math.max(...nodes.map((node) => node.x + node.radius + 7 + measure.measureText(truncate(node.title, 42)).width)) + 24;
+  const top = Math.min(...nodes.map((node) => node.y - node.radius)) - 70;
+  const bottom = Math.max(...nodes.map((node) => node.y + node.radius)) + 70;
+  const fittedWidth = Math.max(260, right - left);
+  const fittedHeight = Math.max(200, bottom - top);
+  const width = fittedWidth / zoom;
+  const height = fittedHeight / zoom;
+  const centerX = (left + right) / 2;
+  const centerY = (top + bottom) / 2;
+  return `${centerX - width / 2} ${centerY - height / 2} ${width} ${height}`;
+}
+
+function GraphNode({ node, matched, active, selected, hovered, onHover, onSelect, href }: {
+  node: PositionedGraphNode;
+  href?: string;
+  matched: boolean;
+  active: boolean;
+  selected: boolean;
+  hovered: boolean;
+  onHover: (id: string | null) => void;
+  onSelect: () => void;
+}) {
+  const showLabel = node.prominent || selected || hovered;
+  const className = ["connection-graph-node", `kind-${node.kind}`, node.prominent ? "prominent" : "", !matched || !active ? "muted" : "", selected ? "selected" : ""].filter(Boolean).join(" ");
+  const activate = (event: React.KeyboardEvent<SVGGElement>) => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); }
+  };
+  const element = <g className={className} transform={`translate(${node.x} ${node.y})`} role={href ? undefined : "button"} tabIndex={href ? undefined : 0} aria-label={href ? undefined : `${node.title}, ${node.kind === "trace" ? "Run" : node.kind === "thread" ? "Thread" : `${node.kind} Object`}, ${node.degree} relationships`} onClick={href ? undefined : (event) => { event.stopPropagation(); onSelect(); }} onKeyDown={href ? undefined : activate} onMouseEnter={() => onHover(node.id)} onMouseLeave={() => onHover(null)}>
+    <circle r={node.radius + 6} className="node-hit-area" />
+    <circle r={node.radius} className="node-dot" />
+    {showLabel && <text x={node.radius + 7} y="4" className="node-label">{truncate(node.title, 42)}</text>}
+  </g>;
+  return href ? <a href={href} aria-label={`${node.title}, ${node.kind === "trace" ? "Run" : node.kind === "thread" ? "Thread" : `${node.kind} Object`}, ${node.degree} relationships`} onClick={event => interceptNavigation(event, href)}>{element}</a> : element;
+}
+
+function GraphEdge({ edge, active, selected, keyboardEnabled, onSelect, markerId = "connection-arrow" }: {
+  edge: PositionedGraphEdge;
+  active: boolean;
+  selected: boolean;
+  keyboardEnabled: boolean;
+  onSelect: () => void;
+  markerId?: string;
+}) {
+  const className = ["connection-graph-edge", !active ? "muted" : "", selected ? "selected" : ""].filter(Boolean).join(" ");
+  const path = `M ${edge.source.x} ${edge.source.y} L ${edge.target.x} ${edge.target.y}`;
+  const activate = (event: React.KeyboardEvent<SVGPathElement>) => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); }
+  };
+  return <g className={className}>
+    <path d={path} className="edge-line" markerEnd={`url(#${markerId})`} />
+    <path d={path} className="edge-hit-area" role={keyboardEnabled ? "button" : undefined} tabIndex={keyboardEnabled ? 0 : -1} aria-label={keyboardEnabled ? `${edge.source.title} ${edge.kind.replaceAll("_", " ")} ${edge.target.title}: ${edge.description}` : undefined} onClick={(event) => { event.stopPropagation(); onSelect(); }} onKeyDown={activate} />
+  </g>;
+}
+
+function GraphInspector({ node, edge, onSelectNode }: {
+  node: PositionedGraphNode | null;
+  edge: PositionedGraphEdge | null;
+  onSelectNode: (id: string) => void;
+}) {
+  if (edge) return <aside className="connection-graph-inspector" aria-label="Selected Connection">
+    <span className="inspector-eyebrow">Connection</span>
+    <h2>{edge.kind.replaceAll("_", " ")}</h2>
+    <p>{edge.description}</p>
+    <div className="inspector-flow">
+      <button onClick={() => onSelectNode(edge.source.id)}>{edge.source.title}</button><span>→</span><button onClick={() => onSelectNode(edge.target.id)}>{edge.target.title}</button>
+    </div>
+    <a href={connectionPath(edge.id)} onClick={(event) => interceptNavigation(event, connectionPath(edge.id))}>Open Connection detail</a>
+  </aside>;
+  if (node) return <aside className="connection-graph-inspector" aria-label="Selected Object">
+      <span className="inspector-eyebrow"><ObjectTypeBadge kind={node.kind} /></span>
+      <h2>{node.title}</h2>
+      <p>{node.degree} direct {node.degree === 1 ? "Connection" : "Connections"} · cluster {node.component + 1}</p>
+      <a href={objectPath(node.id)} onClick={(event) => interceptNavigation(event, objectPath(node.id))}>Open Object detail</a>
+    </aside>;
+  return null;
+}
+
+function MobileGraphList({ nodes, onSelect }: { nodes: PositionedGraphNode[]; onSelect: (id: string) => void }) {
+  const ordered = [...nodes].sort((left, right) => left.component - right.component || right.degree - left.degree || left.title.localeCompare(right.title));
+  return <section className="connection-graph-mobile-list" aria-label="Objects ordered by graph cluster">
+    <h2>Objects by cluster</h2>
+    <ol>{ordered.map((node) => <li key={node.id}><button onClick={() => onSelect(node.id)}><span>{node.title}<small>{node.kind} · cluster {node.component + 1}</small></span><b>{node.degree}</b></button></li>)}</ol>
+  </section>;
+}
+
+function selectionExists(selection: Selection, graph: ConnectionGraphSnapshot): boolean {
+  if (!selection) return false;
+  return selection.type === "node"
+    ? graph.nodes.some((node) => node.id === selection.id)
+    : graph.edges.some((edge) => edge.id === selection.id);
+}
+
+function truncate(value: string, limit: number): string {
+  return value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
+}
+
+function searchRank(node: PositionedGraphNode, query: string): number {
+  const title = node.title.toLocaleLowerCase();
+  if (title === query) return 0;
+  if (title.startsWith(query)) return 1;
+  return 2;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}

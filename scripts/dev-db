@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+umask 077
+mkdir -p .commons
+source scripts/dev-env
+if test -f .commons/pgdata/PG_VERSION && test "$(cat .commons/pgdata/PG_VERSION)" != 15; then
+  echo 'Native development requires PG15; refusing another major version.' >&2
+  exit 1
+fi
+if ! test -f .commons/pgdata/PG_VERSION; then
+  /usr/lib/postgresql/15/bin/initdb -D .commons/pgdata --username=commons --auth-local=trust --auth-host=scram-sha-256 --pwfile=<(cat .commons/db-password) > .commons/initdb.log
+fi
+exec /usr/lib/postgresql/15/bin/postgres -D .commons/pgdata -h 127.0.0.1 -p 55432 -k "$PWD/.commons"

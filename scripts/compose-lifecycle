@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""Private, operator-invoked Compose configuration and historical snapshots. No daemon."""
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import shlex
+import shutil
+import subprocess
+from urllib.parse import urlsplit
+
+ROOT = Path(__file__).resolve().parent.parent
+SECRET_NAMES = (
+    "postgres_password", "migrator_password", "app_password", "admin_password",
+    "app_url", "migrator_url",
+)
+CONFIG_KEYS = {
+    "COMPOSE_PROJECT_NAME", "COMMONS_CONFIG_DIR", "COMMONS_ORIGIN", "COMMONS_HTTP_PORT",
+    "COMMONS_IMAGE_TAG", "COMMONS_APP_IMAGE", "COMMONS_DB_IMAGE", "COMMONS_MODEL_IMAGE",
+    "COMMONS_ADMIN_USER", "COMMONS_ADMIN_NAME", "COMMONS_LOCAL_USER",
+    "COMMONS_INSTALLATION_NAME", "COMMONS_THEME", "COMMONS_APPEARANCE",
+}
+IMAGE_KEYS = {"app": "COMMONS_APP_IMAGE", "db": "COMMONS_DB_IMAGE", "ollama": "COMMONS_MODEL_IMAGE"}
+
+
+def run(args, *, env=None, stdin=None, stdout=subprocess.PIPE):
+    result = subprocess.run(args, cwd=ROOT, env=env, stdin=stdin, stdout=stdout,
+                            stderr=subprocess.PIPE, check=False)
+    if result.returncode:
+        # Commands never contain credentials; do not echo potentially sensitive server errors.
+        raise ValueError(f"command failed ({result.returncode}): {shlex.join(args)}; inspect private service logs")
+    return result.stdout
+
+
+def sha(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def sync(path):
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def settings(project, port, origin):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", project):
+        raise ValueError("project must contain only lowercase letters, digits, underscores and hyphens")
+    if not 1 <= port <= 65535:
+        raise ValueError("port must be between 1 and 65535")
+    origin = origin or f"http://localhost:{port}"
+    url = urlsplit(origin)
+    if (url.username or url.password or url.query or url.fragment or url.path
+            or not url.hostname or url.scheme not in ("http", "https")
+            or (url.scheme == "http" and (url.hostname not in ("localhost", "127.0.0.1") or url.port != port))):
+        raise ValueError("origin must be an exact HTTPS origin or HTTP localhost/127.0.0.1 with the selected port")
+    return {"COMPOSE_PROJECT_NAME": project, "COMMONS_HTTP_PORT": str(port), "COMMONS_ORIGIN": origin}
+
+
+def write_config(directory, values):
+    values = {**values, "COMMONS_CONFIG_DIR": str(directory)}
+    (directory / "config").write_text("".join(f"export {key}={shlex.quote(value)}\n" for key, value in values.items()))
+    (directory / "config").chmod(0o600)
+
+
+def read_config(directory):
+    values = {}
+    for line in (directory / "config").read_text().splitlines():
+        parts = shlex.split(line, comments=True)
+        if not parts:
+            continue
+        if len(parts) != 2 or parts[0] != "export" or "=" not in parts[1]:
+            raise ValueError("config must contain literal 'export KEY=value' lines, not shell commands")
+        key, value = parts[1].split("=", 1)
+        if key not in CONFIG_KEYS or key in values:
+            raise ValueError(f"unsupported or duplicate configuration key: {key}")
+        values[key] = value
+    if "COMPOSE_PROJECT_NAME" not in values:
+        raise ValueError("record COMPOSE_PROJECT_NAME in this installation's config before backup")
+    settings(values["COMPOSE_PROJECT_NAME"], int(values["COMMONS_HTTP_PORT"]), values["COMMONS_ORIGIN"])
+    if Path(values.get("COMMONS_CONFIG_DIR", directory)).resolve() != directory:
+        raise ValueError("config directory does not match its recorded installation")
+    values["COMMONS_CONFIG_DIR"] = str(directory)
+    return values
+
+
+def compose(values, *args, stdin=None, stdout=subprocess.PIPE):
+    # No inherited project, profiles, overrides or neighbouring installation configuration.
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(("COMMONS_", "COMPOSE_"))}
+    env.update(values)
+    return run(["docker", "compose", "--env-file", os.devnull, "--project-directory", str(ROOT),
+                "--file", str(ROOT / "compose.yaml"), "--project-name", values["COMPOSE_PROJECT_NAME"],
+                *args], env=env, stdin=stdin, stdout=stdout)
+
+
+def db_metadata(values):
+    query = """SELECT json_build_object(
+        'postgres', current_setting('server_version'),
+        'vector', (SELECT extversion FROM pg_extension WHERE extname='vector'),
+        'migrations', (SELECT json_agg(json_build_object('version',version,
+            'checksum',encode(checksum,'hex'),'success',success) ORDER BY version)
+            FROM _sqlx_migrations));"""
+    return json.loads(compose(values, "exec", "-T", "db", "psql", "-X", "-U", "postgres",
+                              "-d", "commons", "-At", "-v", "ON_ERROR_STOP=1", "-c", query))
+
+
+def check_database_urls(directory):
+    for role in ("app", "migrator"):
+        password = (directory / "secrets" / f"{role}_password").read_text().strip()
+        url = (directory / "secrets" / f"{role}_url").read_text().strip()
+        if url != f"postgres://commons_{role}:{password}@db:5432/commons":
+            raise ValueError("database URLs must match the standalone Compose DB and role secrets; remote/custom DB layouts are unsupported")
+
+
+def init(args):
+    directory = args.config_dir.resolve()
+    values = settings(args.project, args.port, args.origin)
+    if (directory / "config").exists():
+        print(f"Existing {directory}/config preserved; no settings or secrets changed.")
+        return
+    if directory.exists() and any(directory.iterdir()):
+        raise ValueError("partial configuration directory: refusing to overwrite credentials")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    directory.chmod(0o700)
+    secret_dir = directory / "secrets"
+    secret_dir.mkdir(mode=0o700)
+    for name in SECRET_NAMES[:4]:
+        (secret_dir / name).write_text(secrets.token_hex(32))
+    for role in ("app", "migrator"):
+        password = (secret_dir / f"{role}_password").read_text()
+        (secret_dir / f"{role}_url").write_text(f"postgres://commons_{role}:{password}@db:5432/commons")
+    # Compose secrets are host bind mounts; container users need read permission.
+    # Their host parent directories stay 0700, including after restoration.
+    for path in secret_dir.iterdir():
+        path.chmod(0o444)
+    values["COMMONS_IMAGE_TAG"] = run(["git", "rev-parse", "--short=12", "HEAD"]).decode().strip()
+    write_config(directory, values)
+    print(f"Created {directory}/config and private secrets; no services started.")
+
+
+def backup(args):
+    directory = args.config_dir.resolve()
+    values = read_config(directory)
+    check_database_urls(directory)
+    output = args.output.resolve()
+    resolved = json.loads(compose(values, "config", "--format", "json"))
+    images = {}
+    for service in IMAGE_KEYS:
+        reference = resolved["services"][service]["image"]
+        image = json.loads(run(["docker", "image", "inspect", reference]))[0]
+        container_ids = compose(values, "ps", "--all", "--quiet", service).decode().split()
+        for container_id in container_ids:
+            container = json.loads(run(["docker", "inspect", container_id]))[0]
+            if container["Image"] != image["Id"]:
+                raise ValueError(f"{service} container differs from configured image; reconcile before backup")
+        images[service] = {"reference": reference, "id": image["Id"], "repo_digests": image.get("RepoDigests", [])}
+    before = db_metadata(values)
+    if not before["migrations"] or not all(m["success"] for m in before["migrations"]):
+        raise ValueError("cannot back up an uninitialized or failed migration set")
+    # Exclusive creation: never replace a prior backup. manifest.json is the completion marker.
+    output.mkdir(mode=0o700)
+    secret_dir = output / "secrets"
+    secret_dir.mkdir(mode=0o700)
+    for name in SECRET_NAMES:
+        source = directory / "secrets" / name
+        if source.is_symlink() or not source.is_file():
+            raise ValueError(f"expected a regular secret file: {name}")
+        shutil.copyfile(source, secret_dir / name)
+        (secret_dir / name).chmod(0o600)
+    started = datetime.now(timezone.utc).isoformat()
+    with (output / "database.dump.partial").open("xb") as stream:
+        compose(values, "exec", "-T", "db", "pg_dump", "-U", "postgres", "--dbname=commons",
+                "--format=custom", stdout=stream)
+    after = db_metadata(values)
+    if before != after or values != read_config(directory):
+        raise ValueError("schema/config changed during backup; incomplete bundle is not restorable")
+    for name in SECRET_NAMES:
+        if sha(directory / "secrets" / name) != sha(secret_dir / name):
+            raise ValueError("secrets changed during backup; incomplete bundle is not restorable")
+    (output / "database.dump.partial").rename(output / "database.dump")
+    files = ["database.dump", *(f"secrets/{name}" for name in SECRET_NAMES)]
+    for name in files:
+        sync(output / name)
+    sync(secret_dir)
+    # Checkout metadata is diagnostic, not the deployed image identity. A packaged
+    # installation or macOS filesystem restriction must not prevent DB recovery.
+    try:
+        checkout_revision = run(["git", "rev-parse", "HEAD"]).decode().strip()
+    except (ValueError, OSError):
+        checkout_revision = None
+    manifest = {
+        "format": "commons-compose-backup/1", "created_at": datetime.now(timezone.utc).isoformat(),
+        "dump_started_at": started,
+        "configuration": values, "database": before, "images": images,
+        "docker_engine_id": run(["docker", "info", "--format", "{{.ID}}"]).decode().strip(),
+        "operator_checkout_revision": checkout_revision,
+        "compose_sha256": sha(ROOT / "compose.yaml"), "init_db_sha256": sha(ROOT / "docker/init-db.sh"),
+        "files": {name: sha(output / name) for name in files},
+        "excluded": ["external referenced originals/assets", "client histories/outboxes", "model weights", "application image archives"],
+        "warning": "Historical restore may revive deleted content and formerly valid credentials. No automatic client replay.",
+    }
+    (output / "manifest.json.partial").write_text(json.dumps(manifest, indent=2) + "\n")
+    sync(output / "manifest.json.partial")
+    (output / "manifest.json.partial").rename(output / "manifest.json")
+    sync(output)
+    sync(output.parent)
+    print(f"Completed private historical backup: {output}. Not encrypted; copy off-host only with approved protection.")
+
+
+def restore(args):
+    if not args.accept_historical_state:
+        raise ValueError("pass --accept-historical-state: deleted content and formerly valid credentials can return")
+    bundle = args.bundle.resolve()
+    manifest = json.loads((bundle / "manifest.json").read_text())
+    expected = {"database.dump", *(f"secrets/{name}" for name in SECRET_NAMES)}
+    if manifest.get("format") != "commons-compose-backup/1" or set(manifest["files"]) != expected:
+        raise ValueError("unsupported or incomplete backup manifest")
+    for name in expected:
+        path = bundle / name
+        if path.is_symlink() or not path.is_file() or sha(path) != manifest["files"][name]:
+            raise ValueError(f"backup checksum/type mismatch: {name}")
+    check_database_urls(bundle)
+    if (sha(ROOT / "compose.yaml") != manifest["compose_sha256"]
+            or sha(ROOT / "docker/init-db.sh") != manifest["init_db_sha256"]):
+        raise ValueError("use the reviewed checkout matching the backup's Compose and DB initialization files")
+    directory = args.config_dir.resolve()
+    if directory.exists():
+        raise ValueError("restore requires a nonexistent configuration directory; no overwrite mode exists")
+    values = manifest["configuration"].copy()
+    if not set(values) <= CONFIG_KEYS or not all(isinstance(v, str) for v in values.values()):
+        raise ValueError("unsupported backup configuration")
+    if args.project == values["COMPOSE_PROJECT_NAME"]:
+        raise ValueError("restore must use a different project from the backed-up installation")
+    values.update(settings(args.project, args.port, args.origin))
+    if urlsplit(values["COMMONS_ORIGIN"]).scheme != "http":
+        raise ValueError("initial restore must use a private HTTP loopback origin")
+    for kind, command in (("containers", ["ps", "--all"]), ("volumes", ["volume", "ls"]), ("networks", ["network", "ls"])):
+        found = run(["docker", *command, "--quiet", "--filter", f"label=com.docker.compose.project={args.project}"])
+        if found.strip():
+            raise ValueError(f"target project already has {kind}; refusing to adopt existing resources")
+    volume_names = run(["docker", "volume", "ls", "--format", "{{.Name}}"]).decode().splitlines()
+    if any(f"{args.project}_{name}" in volume_names for name in ("pgdata", "models")):
+        raise ValueError("target volume names already exist; refusing to adopt storage")
+    # Exact images must be retained or independently recovered; never pull a mutable tag.
+    for service, key in IMAGE_KEYS.items():
+        image_id = manifest["images"][service]["id"]
+        if not re.fullmatch(r"sha256:[a-f0-9]{64}", image_id):
+            raise ValueError("invalid recorded image identity")
+        run(["docker", "image", "inspect", image_id])
+        values[key] = image_id
+    directory.mkdir(mode=0o700, parents=True)
+    (directory / "secrets").mkdir(mode=0o700)
+    for name in SECRET_NAMES:
+        shutil.copyfile(bundle / "secrets" / name, directory / "secrets" / name)
+        (directory / "secrets" / name).chmod(0o444)
+    write_config(directory, values)
+    values["COMMONS_CONFIG_DIR"] = str(directory)
+    compose(values, "up", "-d", "--wait", "--no-build", "--pull", "never", "db")
+    # Empty target only: init created roles from the recovered secrets. Recreate its
+    # empty DB from template0 so the dump supplies schemas/extensions/ownership exactly.
+    compose(values, "exec", "-T", "db", "dropdb", "-U", "postgres", "commons")
+    compose(values, "exec", "-T", "db", "createdb", "-U", "postgres", "-O", "commons_migrator", "-T", "template0", "commons")
+    with (bundle / "database.dump").open("rb") as stream:
+        compose(values, "exec", "-T", "db", "pg_restore", "-U", "postgres", "--dbname=commons",
+                "--exit-on-error", "--single-transaction", stdin=stream)
+    compose(values, "exec", "-T", "db", "psql", "-X", "-U", "postgres", "-d", "commons",
+            "-v", "ON_ERROR_STOP=1", "-c", "REVOKE ALL ON DATABASE commons FROM PUBLIC; GRANT CONNECT ON DATABASE commons TO commons_app;")
+    if db_metadata(values) != manifest["database"]:
+        raise ValueError("restored database metadata mismatch; leave application stopped")
+    print(f"Restored DB only into {args.project}; configuration: {directory}/config")
+    print("App/model/capture remain stopped. Review historical content/access, provision model, then explicitly verify/start. Never bootstrap this restored database.")
+
+
+def main():
+    os.umask(0o077)
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    initialize = commands.add_parser("init", help="generate configuration once; never start services")
+    initialize.add_argument("--config-dir", type=Path, default=ROOT / ".commons/compose")
+    initialize.add_argument("--project", default="commons")
+    initialize.add_argument("--port", type=int, default=3000)
+    initialize.add_argument("--origin")
+    save = commands.add_parser("backup", help="create a private completed historical snapshot")
+    save.add_argument("--config-dir", type=Path, required=True)
+    save.add_argument("--output", type=Path, required=True)
+    recover = commands.add_parser("restore", help="restore to a new isolated DB; never start app/capture")
+    recover.add_argument("--bundle", type=Path, required=True)
+    recover.add_argument("--config-dir", type=Path, required=True)
+    recover.add_argument("--project", required=True)
+    recover.add_argument("--port", type=int, required=True)
+    recover.add_argument("--origin")
+    recover.add_argument("--accept-historical-state", action="store_true")
+    args = parser.parse_args()
+    try:
+        {"init": init, "backup": backup, "restore": restore}[args.command](args)
+    except (ValueError, OSError, KeyError) as error:
+        parser.exit(1, f"{error}\n")
+
+
+if __name__ == "__main__":
+    main()

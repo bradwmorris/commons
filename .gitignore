@@ -1,0 +1,15 @@
+# Local credentials and generated state
+.env
+.env.*
+!.env.example
+.DS_Store
+node_modules/
+__pycache__/
+*.py[cod]
+target/
+dist/
+*.log
+.commons/
+.amp/portals/
+.amp/in/
+.amp/out/

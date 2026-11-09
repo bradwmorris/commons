@@ -1,0 +1,42 @@
+name: Verify Commons foundation
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.10.0'
+      - name: Install uv for MCP verification
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install PostgreSQL 15 development prerequisites
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl --proto '=https' --tlsv1.2 -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-15 postgresql-client-15 build-essential pkg-config libssl-dev
+      - name: Build locked application and browser tooling
+        run: |
+          .agents/setup
+          npm ci --prefix tests/e2e
+          tests/e2e/node_modules/.bin/playwright install --with-deps chromium
+      - name: Same verification command as Orbs
+        run: scripts/testing/run verify
+      - name: Keep synthetic-only failure evidence and summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commons-verification-${{ github.sha }}
+          path: tests/e2e/results/
+          if-no-files-found: warn
+          retention-days: 7

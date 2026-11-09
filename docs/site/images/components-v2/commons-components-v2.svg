@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+<title id="title">Your agents connect to the shared system you own</title>
+<desc id="desc">Three people use their own agents, each with its own model, harness and tools. Separate MCP connectors expose Search, Read and Write. The agents connect to Commons, which keeps its API and shared PostgreSQL knowledge outside the agents. Arrows show two-way access.</desc>
+<rect width="1600" height="1000" fill="#101212"/>
+<text x="800" y="63" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" fill="#A4AEA8" text-anchor="middle" letter-spacing="3">YOUR AGENTS</text>
+<circle cx="320" cy="109" r="13" fill="none" stroke="#A4AEA8" stroke-width="3"/>
+<path d="M 293 157 C 293 126, 347 126, 347 157" fill="none" stroke="#A4AEA8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 320 169 V 190" fill="none" stroke="#43524A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="175" y="200" width="290" height="181" rx="20" fill="#171D19" stroke="#43524A" stroke-width="2"/>
+<rect x="281" y="219" width="78" height="56" rx="9" fill="none" stroke="#68DF99" stroke-width="2"/>
+<path d="M 297 235 L 310 245 L 297 255 M 321 257 H 341" fill="none" stroke="#68DF99" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="320" y="311" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#E9EEEA" text-anchor="middle">Agent</text>
+<path d="M 259 334 Q 263 346 275 350 Q 263 354 259 366 Q 255 354 243 350 Q 255 346 259 334 Z" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 333 346 A 14 14 0 1 0 328 362 M 333 336 V 347 H 322" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 369 362 L 383 348 M 383 348 C 378 338, 389 331, 395 338 L 387 344 L 393 350 C 388 357, 382 354, 383 348" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="272" y="399" width="96" height="43" rx="10" fill="#101212" stroke="#43524A" stroke-width="2"/>
+<path d="M 320 381 V 399" fill="none" stroke="#43524A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="320" y="428" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700" fill="#A4AEA8" text-anchor="middle" letter-spacing="1.5">MCP</text>
+<path d="M 312 450 V 505" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 312 450 L 317 462 L 307 462 Z" fill="#68DF99"/>
+<path d="M 328 450 V 505" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 328 505 L 323 493 L 333 493 Z" fill="#68DF99"/>
+<circle cx="800" cy="109" r="13" fill="none" stroke="#A4AEA8" stroke-width="3"/>
+<path d="M 773 157 C 773 126, 827 126, 827 157" fill="none" stroke="#A4AEA8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 800 169 V 190" fill="none" stroke="#43524A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="655" y="200" width="290" height="181" rx="20" fill="#171D19" stroke="#43524A" stroke-width="2"/>
+<rect x="761" y="219" width="78" height="56" rx="9" fill="none" stroke="#68DF99" stroke-width="2"/>
+<path d="M 777 235 L 790 245 L 777 255 M 801 257 H 821" fill="none" stroke="#68DF99" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="800" y="311" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#E9EEEA" text-anchor="middle">Agent</text>
+<path d="M 739 334 Q 743 346 755 350 Q 743 354 739 366 Q 735 354 723 350 Q 735 346 739 334 Z" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 813 346 A 14 14 0 1 0 808 362 M 813 336 V 347 H 802" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 849 362 L 863 348 M 863 348 C 858 338, 869 331, 875 338 L 867 344 L 873 350 C 868 357, 862 354, 863 348" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="752" y="399" width="96" height="43" rx="10" fill="#101212" stroke="#43524A" stroke-width="2"/>
+<path d="M 800 381 V 399" fill="none" stroke="#43524A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="800" y="428" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700" fill="#A4AEA8" text-anchor="middle" letter-spacing="1.5">MCP</text>
+<path d="M 792 450 V 505" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 792 450 L 797 462 L 787 462 Z" fill="#68DF99"/>
+<path d="M 808 450 V 505" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 808 505 L 803 493 L 813 493 Z" fill="#68DF99"/>
+<circle cx="1280" cy="109" r="13" fill="none" stroke="#A4AEA8" stroke-width="3"/>
+<path d="M 1253 157 C 1253 126, 1307 126, 1307 157" fill="none" stroke="#A4AEA8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1280 169 V 190" fill="none" stroke="#43524A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="1135" y="200" width="290" height="181" rx="20" fill="#171D19" stroke="#43524A" stroke-width="2"/>
+<rect x="1241" y="219" width="78" height="56" rx="9" fill="none" stroke="#68DF99" stroke-width="2"/>
+<path d="M 1257 235 L 1270 245 L 1257 255 M 1281 257 H 1301" fill="none" stroke="#68DF99" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1280" y="311" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#E9EEEA" text-anchor="middle">Agent</text>
+<path d="M 1219 334 Q 1223 346 1235 350 Q 1223 354 1219 366 Q 1215 354 1203 350 Q 1215 346 1219 334 Z" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1293 346 A 14 14 0 1 0 1288 362 M 1293 336 V 347 H 1282" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1329 362 L 1343 348 M 1343 348 C 1338 338, 1349 331, 1355 338 L 1347 344 L 1353 350 C 1348 357, 1342 354, 1343 348" fill="none" stroke="#A4AEA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="1232" y="399" width="96" height="43" rx="10" fill="#101212" stroke="#43524A" stroke-width="2"/>
+<path d="M 1280 381 V 399" fill="none" stroke="#43524A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1280" y="428" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700" fill="#A4AEA8" text-anchor="middle" letter-spacing="1.5">MCP</text>
+<path d="M 1272 450 V 505" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1272 450 L 1277 462 L 1267 462 Z" fill="#68DF99"/>
+<path d="M 1288 450 V 505" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1288 505 L 1283 493 L 1293 493 Z" fill="#68DF99"/>
+<path d="M 312 505 H 1288" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="800" y="553" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#68DF99" text-anchor="middle" letter-spacing="2">SEARCH  ·  READ  ·  WRITE</text>
+<rect x="150" y="610" width="1300" height="315" rx="24" fill="#122019" stroke="#68DF99" stroke-width="2"/>
+<text x="204" y="662" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#68DF99" text-anchor="start" letter-spacing="3">COMMONS</text>
+<text x="204" y="697" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#A4AEA8" text-anchor="start">Your shared system</text>
+<path d="M 792 570 V 673" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 792 570 L 797 582 L 787 582 Z" fill="#68DF99"/>
+<path d="M 808 570 V 673" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 808 673 L 803 661 L 813 661 Z" fill="#68DF99"/>
+<rect x="682" y="673" width="236" height="116" rx="16" fill="#101713" stroke="#43524A" stroke-width="2"/>
+<path d="M 738 704 L 727 716 L 738 728 M 862 704 L 873 716 L 862 728" fill="none" stroke="#68DF99" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="800" y="751" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#E9EEEA" text-anchor="middle">API</text>
+<path d="M 792 789 V 815" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 792 789 L 797 801 L 787 801 Z" fill="#68DF99"/>
+<path d="M 808 789 V 815" fill="none" stroke="#68DF99" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 808 815 L 803 803 L 813 803 Z" fill="#68DF99"/>
+<path d="M 731 836 V 875 C 731 897 869 897 869 875 V 836" fill="#182C34" stroke="#8AC5DF" stroke-width="3"/>
+<ellipse cx="800" cy="836" rx="69" ry="18" fill="#243F4C" stroke="#8AC5DF" stroke-width="3"/>
+<text x="982" y="845" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" fill="#E9EEEA" text-anchor="start">Shared knowledge</text>
+<text x="982" y="879" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" fill="#A4AEA8" text-anchor="start">PostgreSQL</text>
+<text x="800" y="969" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" fill="#A4AEA8" text-anchor="middle">Agent = model + harness + tools</text>
+</svg>

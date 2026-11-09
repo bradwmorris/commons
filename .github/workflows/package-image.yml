@@ -1,0 +1,34 @@
+name: Package reviewed application image
+on:
+  workflow_dispatch:
+    inputs:
+      publishing_calendar_url:
+        description: Optional calendar origin for this installation's frontend
+        required: false
+        default: ''
+        type: string
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build exact selected source
+        env:
+          CALENDAR_URL: ${{ inputs.publishing_calendar_url }}
+        run: |
+          docker build --build-arg "VITE_PUBLISHING_CALENDAR_URL=$CALENDAR_URL" -t "commons:source-$GITHUB_SHA" .
+          mkdir package
+          docker image inspect "commons:source-$GITHUB_SHA" --format '{{.Id}} {{.Architecture}}' > package/image.txt
+          printf '%s\n' "$GITHUB_SHA" > package/revision.txt
+          docker save "commons:source-$GITHUB_SHA" | gzip > package/application-image.tar.gz
+          cd package
+          sha256sum application-image.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commons-application-${{ github.sha }}
+          path: package/
+          retention-days: 7
+          compression-level: 0

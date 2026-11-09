@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Explicit synthetic demo initialization/seeding. Never imports or replaces real data."""
+import argparse
+import http.cookiejar
+import json
+import os
+from pathlib import Path
+import secrets
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+import uuid
+
+ROOT = Path(__file__).resolve().parents[1]
+os.chdir(ROOT)
+os.umask(0o077)
+STATE = ROOT / '.commons/demo.json'
+
+
+def save(state):
+    temporary = STATE.with_suffix('.tmp')
+    temporary.write_text(json.dumps(state, indent=2) + '\n')
+    temporary.replace(STATE)
+
+
+def seed_state():
+    state = json.loads(STATE.read_text())
+    if state.get('label') != 'Commons synthetic demo v1':
+        raise RuntimeError('State is not an initialized synthetic demo; refusing to seed.')
+    if state.get('seed_schema_version') != 12:
+        if 'seed_token' in state or state.get('objects'):
+            raise RuntimeError('Legacy demo receipts require explicit migration review; refusing to reseed with changed payloads or duplicate records. Use a fresh isolated schema-12 demo.')
+        state['seed_schema_version'] = 12
+        save(state)
+    return state
+
+
+def portal():
+    manifest = json.loads((ROOT / '.amp/portals/commons.json').read_text())
+    return manifest['links'][0]['url'].rstrip('/')
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class Client:
+    def __init__(self, base, token=None):
+        self.base, self.token = base, token
+        self.opener = urllib.request.build_opener(NoRedirect(),
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+
+    def call(self, route, body=None):
+        headers = {'Content-Type': 'application/json', 'Origin': self.base}
+        if self.token:
+            headers['Authorization'] = 'Bearer ' + self.token
+        request = urllib.request.Request(self.base + '/api/' + route, headers=headers,
+            data=None if body is None else json.dumps(body).encode())
+        try:
+            with self.opener.open(request, timeout=20) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            # Do not log request headers, credentials or response payloads.
+            raise RuntimeError(f'{route.split("?")[0]} returned HTTP {error.code}') from None
+
+    def apply(self, key, operations):
+        return self.call('apply', {'contract_version': 'commons/0.1',
+            'idempotency_key': 'synthetic-demo-v1-' + key, 'operations': operations})
+
+
+def initialize():
+    if not STATE.exists():
+        if (ROOT / '.commons/pgdata/PG_VERSION').exists():
+            raise RuntimeError('Existing native storage is not an initialized demo; refusing to adopt it.')
+        STATE.parent.mkdir(mode=0o700, exist_ok=True)
+        save({'label': 'Commons synthetic demo v1', 'task_issue_urls': {
+            'task': 'https://github.com/synthetic/commons/issues/1',
+            'review': 'https://github.com/synthetic/commons/issues/2',
+        }, 'accounts': {
+            'admin': {'username': 'demo-admin', 'title': 'Alex Morgan · synthetic administrator', 'password': secrets.token_hex(20)},
+            'member': {'username': 'demo', 'title': 'Jamie Chen · synthetic team member', 'password': secrets.token_hex(20)},
+            'reader': {'username': 'demo-reader', 'title': 'Casey Taylor · synthetic reader', 'password': secrets.token_hex(20)},
+        }})
+    state = seed_state()
+    # These explicit commands target only the guarded native checkout installation.
+    subprocess.run(['amp', 'orb', 'service', 'restart', 'commons-db'], check=True)
+    for _ in range(100):
+        if subprocess.run(['pg_isready', '-h', '127.0.0.1', '-p', '55432', '-q']).returncode == 0:
+            break
+        time.sleep(.1)
+    else:
+        raise RuntimeError('Demo PostgreSQL did not become ready; inspect commons-db service logs.')
+    subprocess.run(['scripts/dev-init'], check=True)
+    admin = state['accounts']['admin']
+    env = {k: v for k, v in os.environ.items() if not k.startswith(('PG', 'COMMONS_', 'DATABASE_URL'))}
+    env.update(COMMONS_ADMIN_USER=admin['username'], COMMONS_ADMIN_NAME=admin['title'],
+               COMMONS_ADMIN_PASSWORD=admin['password'])
+    result = subprocess.run(['bash', '-c', 'source scripts/dev-env; target/debug/commons bootstrap'],
+                            env=env, capture_output=True, text=True)
+    if result.returncode and 'bootstrap refused: accounts already exist' not in result.stderr:
+        raise RuntimeError('Demo bootstrap failed; no credentials or existing records were replaced.')
+    subprocess.run(['amp', 'orb', 'services', 'ensure'], check=True)
+    seed()
+
+
+def seed():
+    state = seed_state()
+    base = portal()
+    admin = Client(base)
+    account = state['accounts']['admin']
+    admin.call('login', {'username': account['username'], 'password': account['password']})
+    if admin.call('contract').get('schema_version') != 12:
+        raise RuntimeError('Demo seeding requires schema 12; no users or records were changed.')
+    users = admin.call('users')['users']
+    for role in ('member', 'reader'):
+        account = state['accounts'][role]
+        if not any(u['title'] == account['title'] for u in users):
+            admin.call('users', {**account, 'role': role})
+        user = Client(base)
+        user.call('login', {'username': account['username'], 'password': account['password']})
+        identity = user.call('me')['id']
+        if 'id' in account and account['id'] != identity:
+            raise RuntimeError('Demo account identity changed; refusing to adopt another installation.')
+        account['id'] = identity
+    if 'seed_token' not in state:
+        state['seed_token'] = admin.call('tokens', {'label': 'Synthetic demo repeatable seed',
+            'write_kinds': ['entity', 'note', 'task']})['token']
+        save(state)
+    client = Client(base, state['seed_token'])
+    client.call('me')
+    records = [
+        ('org', 'entity', 'Demo · Harbour Studio', 'Fictional customer-support studio. All records in this example are synthetic.', '', {'entity_kind': 'organisation'}),
+        ('customer', 'entity', 'Demo · Kestrel Coffee', 'Fictional Melbourne customer launching a seasonal coffee subscription.', '', {'entity_kind': 'organisation'}),
+        ('contact', 'entity', 'Demo · Priya Shah', 'Fictional operations contact at Kestrel Coffee; coordinates onboarding and service reviews.', '', {'entity_kind': 'person'}),
+        ('preference', 'note', 'Demo · Kestrel review preference', 'Synthetic agreed preference: service reviews are Tuesdays at 14:00 Australia/Melbourne; send a written agenda the day before.', '', {'intent': 'fact'}),
+        ('support', 'note', 'Demo · Kestrel support agreement', 'Synthetic support agreement: acknowledge delivery issues within one business day and keep a written resolution trail.', '', {'intent': 'fact'}),
+        ('note', 'note', 'Demo · Kestrel onboarding notes', 'Synthetic onboarding evidence supplied by the demo author, not fetched from a real meeting.',
+         'Synthetic meeting notes\n\nKestrel Coffee is trialling a seasonal subscription. Priya coordinates operations. The current service review is Tuesday at 14:00 Australia/Melbourne. The team requested written agendas and an explicit delivery exception checklist.',
+         {'content_format': 'markdown', 'intent': 'fact'}),
+        ('checklist', 'note', 'Demo · Launch readiness checklist', 'Synthetic checklist for the subscription launch: contact, shipping exceptions, agenda and follow-up.',
+         'Synthetic checklist\n\n- Confirm Priya as operational contact.\n- Reconcile delivery exception examples.\n- Send the agenda before the service review.\n- Record decisions with evidence and revision history.',
+         {'content_format': 'markdown', 'intent': 'idea'}),
+        ('task', 'task', 'Demo · Confirm Kestrel launch checklist', 'Synthetic follow-up: review the checklist with the customer contact before the launch rehearsal.',
+         'Synthetic demo only: review connected onboarding evidence and confirm the launch checklist.',
+         {'status': 'todo', 'priority': 'high', 'owner_object_id': state['accounts']['member']['id'],
+          'due_at': '2026-10-21T06:00:00Z', 'project': 'demo',
+          'work_kind': 'general', 'agent_suitable': True}),
+        ('review', 'task', 'Demo · Prepare written service-review agenda', 'Synthetic follow-up: use the saved customer preferences and prepare the review agenda.',
+         'Synthetic demo only: prepare a written agenda and link the customer preference.',
+         {'status': 'backlog', 'priority': 'medium', 'owner_object_id': state['accounts']['member']['id'],
+          'due_at': '2026-10-19T01:00:00Z', 'project': 'demo',
+          'work_kind': 'general', 'agent_suitable': True}),
+    ]
+    ids, revisions = {}, {}
+    for key, kind, title, description, body, fields in records:
+        # Optional synthetic Issue identities stay distinct and stable on replay.
+        if kind == 'task' and key in state.get('task_issue_urls', {}):
+            fields['github_issue_url'] = state['task_issue_urls'][key]
+        result = client.apply(key, [{'op': 'create_object', 'local_ref': key, 'kind': kind,
+            'title': title, 'description': description, 'body': body, 'fields': fields}])
+        ids[key], revisions[key] = result['local_refs'][key], 1
+    client.apply('note-evidence', [{'op': 'append_artifact', 'object_id': ids['note'],
+        'expected_revision': 1, 'body': 'SYNTHETIC FIXTURE — authored example, not a real transcript. Priya asked for written agendas before Tuesday reviews.'}])
+    revisions['note'] += 1
+    edges = [
+        ('org', 'customer', 'related_to', 'Synthetic studio serves the fictional customer.'),
+        ('customer', 'contact', 'involves', 'Synthetic operations contact for this customer.'),
+        ('preference', 'customer', 'about', 'Synthetic customer preference.'),
+        ('preference', 'note', 'derived_from', 'Preference is supported by the synthetic onboarding note.'),
+        ('support', 'customer', 'about', 'Synthetic customer support agreement.'),
+        ('note', 'customer', 'about', 'Onboarding evidence concerns this fictional customer.'),
+        ('task', 'checklist', 'derived_from', 'Follow-up uses the synthetic launch checklist.'),
+        ('task', 'customer', 'about', 'Checklist follow-up is for the fictional customer.'),
+        ('review', 'preference', 'derived_from', 'Agenda follows the stored review preference.'),
+    ]
+    for frm, to, kind, explanation in edges:
+        client.apply(f'link-{frm}-{to}', [{'op': 'create_connection', 'from_id': ids[frm], 'to_id': ids[to],
+            'from_revision': revisions[frm], 'to_revision': revisions[to], 'kind': kind, 'explanation': explanation}])
+        revisions[frm] += 1
+        revisions[to] += 1
+    state['objects'] = ids
+    save(state)
+    print(f'Synthetic demo ready: {len(ids)} records, {len(edges)} connections; repeat seed replays receipts without overwriting edits.')
+    print('See docs/demo.md for explicit protected-portal access; credentials stay private in .commons/demo.json.')
+    print(base)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=['init', 'seed', 'login', 'protect'])
+    args = parser.parse_args()
+    if args.command == 'init':
+        initialize()
+    elif args.command == 'seed':
+        seed()
+    elif args.command == 'protect':
+        state = json.loads(STATE.read_text())
+        base = portal()
+        if state.get('label') != 'Commons synthetic demo v1' or not base.startswith('https://'):
+            raise RuntimeError('Protected mode requires the existing synthetic demo and an HTTPS portal.')
+        account_id = str(uuid.UUID(state['accounts']['member']['id']))
+        config = ROOT / '.commons/protected-demo.json'
+        config.write_text(json.dumps({'origin': base, 'user_id': account_id}) + '\n')
+        print('Protected demo configured. Keep the Amp portal private; restart commons to activate.')
+    else:
+        if (ROOT / '.commons/protected-demo.json').exists():
+            print('No Commons sign-in is needed. Open the private Commons portal through Amp.')
+            return
+        if not sys.stdout.isatty():
+            raise RuntimeError('Login details are displayed only in an interactive private terminal.')
+        account = json.loads(STATE.read_text())['accounts']['member']
+        print('Synthetic demo only. Do not paste these credentials into chat or reports.')
+        print('Username:', account['username'])
+        print('Password:', account['password'])
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (RuntimeError, OSError, subprocess.CalledProcessError, ValueError) as error:
+        raise SystemExit(str(error)) from None

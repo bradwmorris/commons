@@ -1,0 +1,7 @@
+Draft v4, for review only. Do not publish until reviewed.
+Required title: Shared and accumulating context and capabilities. No Commons label.
+Four external agents with existing inspected brand artwork. People above each.
+Base repo context lane: three tools via MCP -> Rust API -> PostgreSQL. Green writes, blue reads and reuse. All context access crosses the API. Cross-agent accumulation is represented by the shared write/read lanes and the final caption.
+Separate organisation-specific capabilities overlay: Skills, Tools, Workflows. Amber dashed use/improve loop attaches to the whole agent group, not to the database API. System boundary encloses both base context and overlay.
+Brand source and licence notices retained in ../components-v3/brand-icons/.
+Render: python3 render.py; sips -s format png shared-context-capabilities-v4.svg --out shared-context-capabilities-v4.png.

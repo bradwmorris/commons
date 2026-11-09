@@ -1,0 +1,90 @@
+---
+title: "Setup your commons"
+description: "Install a Commons app, database and search service, then verify the workspace."
+---
+
+Different agents can work from different places and use the same knowledge store.
+Run Commons on a Docker host so that store can run independently of any one agent
+or laptop. Docker runs the app, PostgreSQL and Ollama together.
+
+Ollama runs a local embedding model. It represents text as vectors so Commons can
+find related passages even when they use different words. PostgreSQL stores those
+vectors alongside your records.
+
+Once the installation works, [connect your agents](/connect).
+
+## Ask your agent to set it up
+
+Give your agent the [Markdown version of this page](/setup.md) and this request:
+
+```text
+Set up a new, empty Commons installation using these instructions.
+Check the host and prerequisites first. Tell me what you need from me.
+Keep passwords and tokens out of this conversation.
+Verify the app, a saved record and persistence after restart when finished.
+Then show me the agent-specific connection instructions.
+Do not change an existing installation or delete its data.
+```
+
+Your agent needs access to the Commons repository and permission to use the chosen
+host. You will need to handle private credentials and any steps it cannot perform.
+
+## Before installation
+
+The current installation path uses a Linux host with:
+
+- Docker Engine running, with Compose v2.20 or later.
+- Python 3 and Git.
+- Network access for downloads, and enough memory and disk space to build the app.
+
+Check `docker info` and `docker compose version`. Mac/ARM and clean-host installation
+have not yet completed the same verification. Use a reviewed source revision.
+
+## Installation steps
+
+For the agent or operator, from the Commons repository root:
+
+```sh
+git clone https://github.com/bradwmorris/commons-public.git commons
+cd commons
+scripts/dev-compose-config --config-dir .commons/first --project commons-first --port 3401
+source .commons/first/config
+docker compose build app db ollama
+docker compose run --rm model-provision
+docker compose up -d --wait db ollama
+docker compose run --rm migrate
+docker compose run --rm bootstrap
+docker compose up -d --wait app
+docker compose ps
+```
+
+Run each command only after the previous one succeeds. If a step fails, fix the
+cause before continuing. Keep the generated configuration, secrets and project name.
+
+Open **http://localhost:3401** and sign in as `admin`. The initial password is in
+`.commons/first/secrets/admin_password`. Read it privately; do not paste it into a chat.
+
+## Check it works
+
+1. Confirm the workspace is empty, apart from its administrator.
+2. In **Access**, create a named member for everyday work.
+3. Sign in as that member and save a Note with a distinctive sentence.
+4. Reopen the Note and check the text. Find it again by title.
+5. Restart the app, then confirm the original Note is still there.
+
+The database installation is ready when these checks pass. Next,
+[choose an agent connector](/connect) and follow its setup and verification steps.
+
+Keep fictional demo data in a separate installation.
+
+## Keep it running
+
+The database lives in a persistent Docker volume. Keep the same project name and
+configuration when restarting. Do not delete volumes to fix a startup problem.
+
+Back up before upgrades and practise restoring into a separate installation.
+A historical backup can bring back deleted records and old credentials. Updates
+may require an explicit migration; restarting the app does not run one.
+
+The repository's `docs/installation-lifecycle.md` contains the full backup, restore
+and upgrade procedures. Use those instructions for operations beyond this first setup.

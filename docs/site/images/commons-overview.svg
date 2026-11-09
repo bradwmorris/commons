@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" role="img" aria-labelledby="title desc"><title id="title">Your agents. Your shared knowledge.</title><desc id="desc">Multiple people bring their own agents. Each agent has a harness, model and other tools. Commons search, read and write tools are exposed through MCP and reach the authenticated API, which accesses PostgreSQL. People can also use the browser UI.</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#37856B" /></marker></defs><rect width="1280" height="820" fill="white" />
+<text x="48" y="55" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#16392E" text-anchor="start">Your agents. Your shared knowledge.</text>
+<text x="48" y="88" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#53675F" text-anchor="start">Choose different agents. Keep useful knowledge together.</text>
+<text x="228" y="139" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#16392E" text-anchor="middle">Person A</text>
+<rect x="48" y="160" width="360" height="132" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="70" y="195" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">Agent A</text>
+<text x="70" y="226" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Harness + model</text>
+<text x="70" y="251" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Other tools + Commons tools</text>
+<path d="M 228 292 V 330" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<text x="620" y="139" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#16392E" text-anchor="middle">Person B</text>
+<rect x="440" y="160" width="360" height="132" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="462" y="195" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">Agent B</text>
+<text x="462" y="226" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Harness + model</text>
+<text x="462" y="251" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Other tools + Commons tools</text>
+<path d="M 620 292 V 330" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<text x="1012" y="139" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#16392E" text-anchor="middle">Person C</text>
+<rect x="832" y="160" width="360" height="132" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="854" y="195" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">Agents C + D</text>
+<text x="854" y="226" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Harness + model</text>
+<text x="854" y="251" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Other tools + Commons tools</text>
+<path d="M 1012 292 V 330" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<path d="M 228 330 H 1012 M 620 330 V 354" fill="none" stroke="#37856B" stroke-width="2.4" />
+<rect x="250" y="356" width="740" height="112" rx="14" fill="#F0F7F3" stroke="#37856B" stroke-width="2" />
+<text x="272" y="391" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">MCP connection</text>
+<text x="272" y="422" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">commons_search     ·     commons_read     ·     commons_write</text>
+<text x="620" y="495" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#37856B" text-anchor="middle">Read knowledge → do work → save useful findings</text>
+<path d="M 620 511 V 540" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<rect x="400" y="542" width="440" height="92" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="422" y="577" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">Commons API</text>
+<text x="422" y="608" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Checks access and applies changes</text>
+<path d="M 620 634 V 666" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<rect x="400" y="668" width="440" height="98" rx="14" fill="#F0F7F3" stroke="#37856B" stroke-width="2" />
+<text x="422" y="703" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">PostgreSQL database</text>
+<text x="422" y="734" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">Shared records, evidence and relationships</text>
+<rect x="48" y="548" width="270" height="86" rx="14" fill="white" stroke="#94B2A4" stroke-width="2" />
+<text x="70" y="583" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#16392E" text-anchor="start">Browser UI</text>
+<text x="70" y="614" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="start">People view and edit</text>
+<path d="M 318 591 H 400" fill="none" stroke="#37856B" stroke-width="2.4" stroke-linejoin="round" />
+<text x="620" y="802" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53675F" text-anchor="middle">Agents run in their own environments. Commons holds the shared knowledge.</text>
+<polygon points="228,330 223.5,320 232.5,320" fill="#37856B" /><polygon points="228,292 232.5,302 223.5,302" fill="#37856B" /><polygon points="620,330 615.5,320 624.5,320" fill="#37856B" /><polygon points="620,292 624.5,302 615.5,302" fill="#37856B" /><polygon points="1012,330 1007.5,320 1016.5,320" fill="#37856B" /><polygon points="1012,292 1016.5,302 1007.5,302" fill="#37856B" /><polygon points="620,354 615.5,344 624.5,344" fill="#37856B" /><polygon points="620,540 615.5,530 624.5,530" fill="#37856B" /><polygon points="620,511 624.5,521 615.5,521" fill="#37856B" /><polygon points="620,666 615.5,656 624.5,656" fill="#37856B" /><polygon points="620,634 624.5,644 615.5,644" fill="#37856B" /><polygon points="400,591 390,595.5 390,586.5" fill="#37856B" /><polygon points="318,591 328,586.5 328,595.5" fill="#37856B" /></svg>

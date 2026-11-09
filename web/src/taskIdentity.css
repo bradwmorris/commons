@@ -1,0 +1,23 @@
+.task-assignee { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.task-assignee.missing, .task-readiness { color: var(--text-muted, #777); font-size: 11px; }
+.task-github-link { display: inline-flex; align-items: center; gap: 6px; position: relative; z-index: 2; color: inherit; padding: 4px; border-radius: 4px; flex-shrink: 0; }
+.task-github-link svg { width: 18px; height: 18px; }
+.task-github-link:hover { background: var(--hover); }
+.task-github-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.task-readiness { display: inline-block; }
+.task-fields { display: grid; gap: 12px; }
+.task-fields label { display: grid; gap: 5px; }
+
+.task-create-form { max-height: calc(86vh - 72px); overflow-y: auto; gap: 10px; }
+.task-create-form .create-body { min-height: 80px; }
+.task-fields { font-size: 13px; color: var(--text-secondary); }
+.task-fields input, .task-fields select, .task-fields textarea { width: 100%; border: 1px solid #3d3f47; border-radius: 6px; background: #141517; color: #d9dade; padding: 9px 10px; }
+.task-fields textarea { min-height: 80px; resize: vertical; }
+.task-create-form .create-footer { position: sticky; bottom: -14px; background: #151517; padding: 12px 0; }
+
+.task-project-badge { display: inline-flex; align-items: center; width: fit-content; padding: 2px 7px; border: 1px solid var(--border, #d1d5db); border-radius: 5px; background: var(--panel-raised); color: var(--text-primary); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.task-project-badge.missing { opacity: .65; }
+
+.task-project-badge.project-colour { gap: 4px; padding: 3px 6px; border-radius: 5px; font-size: 10px; line-height: 1.2; letter-spacing: .045em; color: hsl(var(--project-hue) 75% 78%); background: hsl(var(--project-hue) 55% 52% / .14); border-color: hsl(var(--project-hue) 65% 65% / .26); flex-shrink: 0; }
+.task-project-badge.project-colour > span:first-child { font-size: 12px; line-height: 1; }
+.task-project-badge.project-colour.missing { color: var(--text-muted); background: #ffffff06; border-color: #ffffff16; }

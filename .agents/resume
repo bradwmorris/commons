@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+# No installs, migrations, credential changes, resets or automatic bootstrap on wake.
+test -x target/debug/commons || { echo 'Run .agents/setup before starting Commons'; exit 1; }
+test -f web/dist/index.html || { echo 'Missing web build; run .agents/setup'; exit 1; }
+echo 'Commons build present. Supervised services retain their own lifecycle.'
