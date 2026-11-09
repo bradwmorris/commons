@@ -53,7 +53,7 @@ Notes. Agents use the API, never direct database access.
 Clone the public source on a Linux host with Docker Engine and Compose:
 
 ```sh
-git clone https://github.com/bradwmorris/commons-public.git commons
+git clone https://github.com/bradwmorris/commons.git commons
 cd commons
 ```
 
