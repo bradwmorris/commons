@@ -17,6 +17,7 @@ import time
 import uuid
 
 import commons_capture as outbox
+import commons_tool_links
 
 VERSION = 1
 ROUTE_TOOL = 'commons_capture_route'
@@ -76,10 +77,14 @@ def source_for(config, provider, thread):
 
 def configure(db, config, now=None):
     required = {'namespace', 'codex_home', 'codex', 'amp', 'token_file', 'domain_label'}
-    if not required <= set(config) or set(config) - required - {'speaker_ids'}:
+    if not required <= set(config) or set(config) - required - {'speaker_ids', 'commons_object_links'}:
         raise ValueError('invalid automatic capture configuration keys')
     if not all(isinstance(config[k], str) and config[k].strip() for k in required):
         raise ValueError('configuration values must be nonempty strings')
+    links = config.get('commons_object_links', {})
+    if not isinstance(links, dict) or (links and (set(links) != {'server', 'installation'}
+            or not all(isinstance(v, str) and 0 < len(v) <= 100 for v in links.values()))):
+        raise ValueError('Object links require a fixed MCP server and installation')
     mappings = config.get('speaker_ids', {})
     if not isinstance(mappings, dict) or set(mappings) - {'codex', 'amp'}:
         raise ValueError('invalid speaker providers')
@@ -430,6 +435,13 @@ def reconcile(db, source, turns, secrets=(), *, max_batches=None):
         cursor = {'seen': {}, 'coverage': None}
     else:
         cursor = json.loads(existing['cursor']) if existing['cursor'] else {'seen': {}, 'coverage': None}
+    link_config = config.get('commons_object_links') if source['provider'] == 'codex' else None
+    paired_calls = {}
+    if link_config:
+        for entry in accepted:
+            if entry['kind'] == 'tool_call' and entry['tool_name'] == 'McpToolCall' and entry['tool_call_id']:
+                pair = (entry['turn_id'], entry['tool_call_id'])
+                paired_calls[pair] = entry if pair not in paired_calls else None
     pending, seen_now = [], set()
     for original in accepted:
         entry = dict(original)
@@ -478,10 +490,18 @@ def reconcile(db, source, turns, secrets=(), *, max_batches=None):
             size += item_size
         pending = pending[len(chunk):]
         batch_items = [entry for entry, _ in chunk]
+        runs = []
+        if link_config:
+            for entry in batch_items:
+                if entry['kind'] == 'tool_result' and entry['tool_name'] == 'McpToolCall':
+                    call = paired_calls.get((entry['turn_id'], entry['tool_call_id']))
+                    run = commons_tool_links.trace_for(call, entry, link_config)
+                    if run:
+                        runs.append(run)
         envelope = {'contract_version': outbox.CONTRACT, 'source': source,
-                    'batch_id': digest([batch_items, coverage]),
+                    'batch_id': digest([batch_items, coverage, runs] if runs else [batch_items, coverage]),
                     'title': config['domain_label'] + ' — ' + source['provider'] + ' conversation',
-                    'history': False, 'coverage': coverage, 'items': batch_items, 'attachments': [], 'runs': [],
+                    'history': False, 'coverage': coverage, 'items': batch_items, 'attachments': [], 'runs': runs,
                     **({'on_behalf_of':config['on_behalf_of']} if config.get('on_behalf_of') else {})}
         next_cursor = {'seen': {**cursor['seen'], **{x['source_item_id']: h for x, h in chunk}}, 'coverage': digest(coverage)}
         outbox.enqueue(db, envelope, outbox.canonical(next_cursor))

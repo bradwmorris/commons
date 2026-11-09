@@ -88,9 +88,27 @@ pub struct RunInput {
     pub review: Value,
     #[serde(default)]
     pub consulted_object_ids: Vec<Uuid>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    object_effects: Vec<ObjectEffect>,
     pub source_created_at: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
+}
+
+#[derive(Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ObjectEffect {
+    id: Uuid,
+    revision: i64,
+    operation: ObjectOperation,
+}
+
+#[derive(Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ObjectOperation {
+    Read,
+    Created,
+    Updated,
 }
 
 fn empty_object() -> Value {
@@ -333,6 +351,14 @@ async fn save_run(tx: &mut atomic::Tx<'_>, a: &Actor, thread: Uuid, r: &RunInput
         timestamp(t)?;
     }
     bounded(&r.source_run_id, 300)?;
+    if !r.object_effects.is_empty()
+        && (r.kind != "commons-tool-call"
+            || r.object_effects.len() > 50
+            || r.object_effects.iter().any(|effect| effect.revision <= 0))
+    {
+        return Err(invalid("Invalid Commons tool-call Object effects"));
+    }
+
     if !r.trace.is_array() || r.trace.to_string().len() > 1024 * 1024 {
         return Err(invalid("Trace steps must be a bounded array"));
     }
@@ -373,7 +399,9 @@ async fn save_run(tx: &mut atomic::Tx<'_>, a: &Actor, thread: Uuid, r: &RunInput
         return Err(fail(StatusCode::CONFLICT, "Trace identity cannot change"));
     }
     let mut details = serde_json::to_value(r).unwrap();
-    details.as_object_mut().unwrap().remove("trace");
+    let detail_fields = details.as_object_mut().unwrap();
+    detail_fields.remove("trace");
+    detail_fields.remove("object_effects");
     details["attribution"] = attribution::action(a);
     let saved = sqlx::query("INSERT INTO traces(id,thread_id,parent_id,source_id,kind,status,actor_id,primary_object_id,started_at,completed_at,details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::text::timestamptz,$10::text::timestamptz,$11) ON CONFLICT(id) DO UPDATE SET kind=$5,status=$6,primary_object_id=$8,started_at=$9::text::timestamptz,completed_at=$10::text::timestamptz,details=$11,revision=traces.revision+1 WHERE traces.thread_id=$2 AND traces.source_id=$4 AND traces.kind=$5 AND traces.revision=$12")
  .bind(r.id).bind(thread).bind(r.parent_run_id).bind(&r.source_run_id).bind(&r.kind).bind(&r.status).bind(r.actor_id.or(Some(a.id))).bind(r.primary_object_id).bind(&r.started_at).bind(&r.completed_at).bind(&details).bind(r.expected_revision.unwrap_or(0)).execute(&mut **tx).await?;
@@ -425,6 +453,23 @@ async fn save_run(tx: &mut atomic::Tx<'_>, a: &Actor, thread: Uuid, r: &RunInput
     for oid in &r.consulted_object_ids {
         let o = atomic::object(tx, *oid, false).await?;
         sqlx::query("INSERT INTO connections(id,from_trace_id,to_id,kind,explanation,provenance) SELECT $1,$2,$3,'consulted','Object recorded as consulted by this execution.',$4 WHERE NOT EXISTS(SELECT 1 FROM connections WHERE from_trace_id=$2 AND to_id=$3 AND kind='consulted')").bind(Uuid::new_v4()).bind(r.id).bind(oid).bind(json!({"operation":"read","object_revision":o["revision"],"attribution":attribution::action(a)})).execute(&mut **tx).await?;
+    }
+    for effect in &r.object_effects {
+        let (kind, operation) = match effect.operation {
+            ObjectOperation::Read => ("consulted", "read"),
+            ObjectOperation::Created => ("created", "created"),
+            ObjectOperation::Updated => ("updated", "updated"),
+        };
+        // A delayed capture can outlive the target. Keep the Trace without
+        // making an invalid or deleted target block the whole capture batch.
+        sqlx::query("INSERT INTO connections(id,from_trace_id,to_id,kind,explanation,provenance)
+            SELECT $1,$2,o.id,$3,'Object recorded by a successful Commons tool call.',$4
+            FROM objects o WHERE o.id=$5 AND o.revision >= $6
+            AND NOT o.provenance ? 'deleted_at' AND o.kind <> 'thread'
+            AND NOT EXISTS(SELECT 1 FROM connections c WHERE c.from_trace_id=$2 AND c.to_id=o.id AND c.kind=$3)")
+            .bind(Uuid::new_v4()).bind(r.id).bind(kind)
+            .bind(json!({"operation":operation,"object_revision":effect.revision,"attribution":attribution::action(a)}))
+            .bind(effect.id).bind(effect.revision).execute(&mut **tx).await?;
     }
     sqlx::query("INSERT INTO changes(kind,object_id,target_type,target_id,revision,actor_id,credential_id,occurred_at,payload) VALUES('trace',$1,'trace',$2,$3,$4,$5,now(),$6)").bind(thread).bind(r.id).bind(prior.unwrap_or(0)+1).bind(a.id).bind(a.credential).bind(details).execute(&mut **tx).await?;
     Ok(())
@@ -548,26 +593,51 @@ pub async fn chat_relationships(
     State(app): State<App>,
     h: HeaderMap,
     Path(id): Path<Uuid>,
+    Query(page): Query<Page>,
 ) -> Result<Json<Value>> {
-    relationships(&app, &h, id, false).await
+    relationships(&app, &h, id, false, page).await
 }
 pub async fn run_relationships(
     State(app): State<App>,
     h: HeaderMap,
     Path(id): Path<Uuid>,
+    Query(page): Query<Page>,
 ) -> Result<Json<Value>> {
-    relationships(&app, &h, id, true).await
+    relationships(&app, &h, id, true, page).await
 }
-async fn relationships(app: &App, h: &HeaderMap, id: Uuid, trace: bool) -> Result<Json<Value>> {
+async fn relationships(
+    app: &App,
+    h: &HeaderMap,
+    id: Uuid,
+    trace: bool,
+    page: Page,
+) -> Result<Json<Value>> {
+    let limit = page.limit()?;
     let mut tx = app.db.begin().await?;
     actor(app, h, &mut tx, false).await?;
     let rows=sqlx::query_scalar::<_,Value>(&format!("SELECT {} FROM connections c WHERE $1 IN(from_id,to_id,from_trace_id,to_trace_id) ORDER BY c.id LIMIT 200",collections::CONNECTION_JSON)).bind(id).fetch_all(&mut *tx).await?;
-    let refs = if !trace {
-        sqlx::query_scalar::<_,Value>("SELECT jsonb_build_object('id',id,'kind','trace','title',kind,'relation','trace') FROM traces WHERE thread_id=$1 AND deleted_at IS NULL ORDER BY received_at LIMIT 200").bind(id).fetch_all(&mut *tx).await?
-    } else {
-        Vec::new()
-    };
-    Ok(Json(json!({"connections":rows,"references":refs})))
+    let mut refs = sqlx::query_scalar::<_, Value>(
+        "WITH related_traces AS (
+            SELECT id,kind,primary_object_id FROM traces
+            WHERE deleted_at IS NULL AND (CASE WHEN $2 THEN id=$1 ELSE thread_id=$1 END)
+         ), object_refs AS (
+            SELECT c.to_id AS id,c.kind AS relation FROM related_traces t
+            JOIN connections c ON c.from_trace_id=t.id
+            WHERE c.kind IN ('consulted','created','updated') AND c.to_id IS NOT NULL
+            UNION SELECT primary_object_id,'primary_object' FROM related_traces WHERE primary_object_id IS NOT NULL
+         )
+         SELECT jsonb_build_object('id',ref.id,'kind',ref.kind,'title',ref.title,'relation',ref.relation,'archived_at',ref.archived_at)
+         FROM (
+            SELECT o.id,o.kind,o.title,r.relation,o.metadata->>'archived_at' AS archived_at FROM object_refs r
+            JOIN objects o ON o.id=r.id AND NOT o.provenance ? 'deleted_at'
+            UNION ALL SELECT id,'trace',kind,'trace',NULL FROM related_traces WHERE NOT $2
+         ) ref ORDER BY (ref.relation='trace'),ref.id,ref.relation LIMIT $3 OFFSET $4"
+    ).bind(id).bind(trace).bind(limit + 1).bind(page.offset).fetch_all(&mut *tx).await?;
+    let next = (refs.len() as i64 > limit).then(|| page.offset.saturating_add(limit));
+    refs.truncate(limit as usize);
+    Ok(Json(
+        json!({"connections":rows,"references":refs,"next_offset":next}),
+    ))
 }
 pub async fn run_history(
     State(app): State<App>,

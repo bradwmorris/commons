@@ -201,7 +201,7 @@ function Run({ id, refreshKey, onLoaded }: { id: string; refreshKey: number; onL
     {correction != null && <Section title="Correction (original preserved)"><JsonRecord value={correction} /></Section>}
     {!!run.consulted_object_ids.length && <details className="detail-disclosure"><summary>Consulted objects</summary>
       {run.consulted_object_ids.map((objectId, index) => {
-        const reference = run.historical_references.find(ref => ref.object_id === objectId);
+        const reference = run.historical_references?.find(ref => ref.object_id === objectId);
         return <div key={index}>{!reference || reference.state === "present" ? <ObjectId id={objectId} compact /> : <>
           <p className="muted">{objectId} · {reference.state === "deleted" ? "Deleted in source history" : "Missing; cause unknown"}</p>
           {!!reference.purge_evidence.length && <details className="detail-disclosure"><summary>Retained source purge evidence</summary><JsonRecord value={reference.purge_evidence} /></details>}

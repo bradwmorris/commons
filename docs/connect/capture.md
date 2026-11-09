@@ -215,6 +215,12 @@ map shows the current reference page and up to 200 saved Connections, with a
 visible truncation notice; the related list retains all saved Connections. No schema migration,
 backfill or relationship inference from prose is performed.
 
+A paired Commons tool-call Trace may supply up to 50 `object_effects` with an
+Object `id`, its observed positive `revision` and an `operation` of `read`,
+`created` or `updated`. Capture saves a Connection for each available Object and
+operation. An unavailable or deleted Object is skipped. A Thread includes the
+Object references from its Traces, deduplicated by Object and relationship kind.
+
 ### Thread participants
 
 Thread collections return a distinct `participants` array with User IDs, names, kinds and current avatar URLs. Both collection avatars and Thread relationship references include recorded speakers, linked Run actors, and active `involves` Connections to Users in either direction. Multiple humans and agents are supported; repeated appearances are deduplicated. Historical archived User identities remain attributable. The upload credential owner is not automatically treated as a participant, and missing speaker IDs are not guessed. Later captured speakers join the same participant set. These explicit references do not manufacture authored Connections.

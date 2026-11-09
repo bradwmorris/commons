@@ -7,7 +7,7 @@ import type { Connection, ConnectionGraphSnapshot, ObjectKind } from "./types";
 
 type Reference = { id: string; title: string | null; kind: ObjectKind | "trace" | "user" | "artifact" | null; relation: string; archived_at: string | null };
 type ReferencePage = { references: Reference[]; next_offset: number | null };
-const labels: Record<string, string> = { participant: "Participant", parent_thread: "Parent thread", run: "Trace", linked_run_work: "Work linked through a Run", run_actor: "Run actor", actor: "Actor", thread: "Thread", primary_object: "Primary object", consulted: "Consulted", parent_run: "Parent Run", child_run: "Child Run" };
+const labels: Record<string, string> = { participant: "Participant", parent_thread: "Parent thread", run: "Trace", linked_run_work: "Work linked through a Run", run_actor: "Run actor", actor: "Actor", thread: "Thread", primary_object: "Primary object", consulted: "Read", created: "Created", updated: "Updated", trace: "Trace", parent_run: "Parent Run", child_run: "Child Run" };
 const pathFor = (reference: Reference) => reference.kind === "trace" ? `/traces/${reference.id}` : reference.kind === "user" ? `/users/${reference.id}` : objectPath(reference.id);
 
 export function CaptureRelationships({ id, title, section, refreshKey }: { id: string; title: string; section: "threads" | "traces"; refreshKey: number }) {
@@ -57,7 +57,7 @@ export function CaptureRelationships({ id, title, section, refreshKey }: { id: s
           </article>)}
         </div>
         {(offset > 0 || references.next_offset !== null) && <div className="inline-editor-actions" aria-label="Relationship pagination"><button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>Previous relationships</button><span>Page {offset / 50 + 1}</span><button disabled={references.next_offset === null} onClick={() => setOffset(references.next_offset!)}>Next relationships</button></div>}
-        <p className="muted">Supplied references come from recorded participants and Run fields. Saved Connections retain their explanations. No links are inferred from message text.</p>
+        <p className="muted">Recorded references include Trace activity and supplied links. Saved Connections retain their explanations. No links are inferred from message text.</p>
         {connections.length > 200 && <p role="status">The map shows the first 200 saved Connections; the list above includes all saved Connections.</p>}
         {(offset > 0 || references.next_offset !== null) && <p role="status">The map shows this page of supplied references and saved Connections.</p>}
       </>}

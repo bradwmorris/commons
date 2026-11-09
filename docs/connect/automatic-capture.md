@@ -66,7 +66,7 @@ on the actual personal installation before claiming rollout complete.
 
 Use Python 3.11+ on macOS or Linux and the CLI for the provider you scan. Use absolute
 CLI paths in scheduler configuration. Keep `auto_capture.py` beside
-`commons_capture.py`. Install only a reviewed revision; upgrades preserve state.
+`commons_capture.py` and `commons_tool_links.py`. Install only a reviewed revision; upgrades preserve state.
 
 1. Create an owner-only state directory and a separate 0600 file containing a
    destination-scoped token with only the `thread` write kind on schema 12.
@@ -93,6 +93,21 @@ CLI paths in scheduler configuration. Keep `auto_capture.py` beside
    The current config requires both CLI fields. For an unused provider, use
    `/usr/bin/false` as its executable and always pass the provider flag below.
    For Amp-only setup, point `codex_home` at an empty private directory.
+For a fresh test installation with a compatible Commons server, you can opt into
+Object links by adding `"commons_object_links": {"server": "commons_example",
+"installation": "example"}` to this private configuration. The MCP name and
+the connector's installation marker must both match the intended destination.
+Use the same destination for capture and the connector. Leave the setting
+absent for existing installations until their capture configuration can be
+upgraded while preserving state. Never reset activation to enable Object links.
+
+This pilot supports direct Codex MCP completions with the fixed connector result
+envelope. A paired successful Object read or committed Object creation or
+update records a tool-call Trace and its Object relationships. Search, dry runs,
+unmatched events and other connectors do not add links. A tool-call Trace
+belongs to the captured Thread and is separate from native OpenTelemetry.
+Previously queued or delivered turns are left as they were.
+
 4. Run `auto_capture.py --state STATE activate --config CONFIG
    --acknowledge-shared-readership`. Activation is immutable. Turns begun earlier
    are excluded even if the agent routes them later. Forked Amp messages predating

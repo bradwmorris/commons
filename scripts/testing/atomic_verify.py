@@ -86,6 +86,10 @@ def verify(args):
             assert code == 200, result
             command(['node', 'tests/e2e/atomic-check.mjs'], env)
             report['checks'].append('nine desktop/narrow Chromium checks plus native Trace journeys')
+            command([sys.executable, '-B', 'tests/capture_object_links.py'], env)
+            command(['node', 'tests/e2e/capture-object-links-check.mjs'], env)
+            report['checks'].append('captured tool-call Object links and Thread rollup in API and browser')
+
             sentinel = result['local_refs']['task']
             before = client.call('objects/' + sentinel)
             # Browser intentionally changed the body, so snapshot after that edit.
