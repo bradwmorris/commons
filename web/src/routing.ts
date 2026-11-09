@@ -3,14 +3,17 @@ export const sections = {
   objects: "Objects", connections: "Connections", tasks: "Tasks", users: "Users",
   entities: "Entities", notes: "Notes", publishing: "Publishing", access: "Access",
   sources: "Sources", themes: "Themes", events: "Events",
-  threads: "Threads", traces: "Traces", schema: "Schema",
+  threads: "Threads", traces: "Traces", schema: "Schema", inventory: "Inventory",
 } as const;
 export const publishingCalendarUrl = import.meta.env.VITE_PUBLISHING_CALENDAR_URL?.trim() ?? "";
 export type Section = keyof typeof sections;
 export const kindSections: Record<string, Section> = { task: "tasks", entity: "entities", note: "notes", source: "sources", theme: "themes", event: "events", thread: "threads" };
-export function parseRoute() {
+export function parseRoute(overlayInventory = false) {
   const [rawSegment = "objects", id, child, artifact] = window.location.pathname.split("/").filter(Boolean);
   const segment = ({ memories: "notes", chats: "threads", runs: "traces" } as Record<string,string>)[rawSegment] ?? rawSegment;
+  if (segment === "inventory" && !overlayInventory) {
+    return { section: "objects" as const, id: null, artifactId: null, view: null };
+  }
   return { section: (segment in sections && (segment !== "publishing" || publishingCalendarUrl) ? segment : "objects") as Section, id: id ?? null,
     artifactId: child === "artifacts" ? artifact ?? null : null,
     view: new URLSearchParams(window.location.search).get("view") };

@@ -16,6 +16,7 @@ import { RecordList } from "./RecordList";
 import { TaskBoard } from "./TaskBoard";
 import { ConnectionGraphWorkspace, FocusedObjectGraph } from "./ConnectionGraph";
 import { UserDetail, UserList } from "./Users";
+import { OverlayInventory } from "./OverlayInventory";
 import { SchemaWorkspace } from "./Schema";
 import { ConversationWorkspace } from "./Conversations";
 import { kindSections, sections, publishingCalendarUrl, parseRoute, navigate, interceptNavigation, objectPath, connectionPath, type Section } from "./routing";
@@ -23,7 +24,7 @@ import type { Connection, RelatedConnection, Endpoint, User, Credential, Detail,
 
 const writableKinds = ["task", "note", "entity", "source", "theme", "event"] as const;
 type WritableKind = typeof writableKinds[number];
-const icons: Record<Section, string> = { objects: "◇", connections: "⌁", tasks: "✓", users: "♙", entities: "◎", notes: "▱", sources: "▤", themes: "#", events: "◷", access: "⚿", threads: "☷", traces: "▷", schema: "▦", publishing: "▦" };
+const icons: Record<Section, string> = { objects: "◇", connections: "⌁", tasks: "✓", users: "♙", entities: "◎", notes: "▱", sources: "▤", themes: "#", events: "◷", access: "⚿", threads: "☷", traces: "▷", schema: "▦", publishing: "▦", inventory: "≡" };
 const issuePattern = "https://github[.]com/[A-Za-z0-9_.\\-]+/[A-Za-z0-9_.\\-]+/issues/[1-9][0-9]*";
 const issueRegex = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/[1-9][0-9]*$/;
 const text = (value: unknown) => typeof value === "string" ? value : "";
@@ -79,7 +80,7 @@ function Login({ branding, error: initialError, onLogin }: { branding: Branding;
 }
 
 function Workspace({ branding, identity, automaticEntry, onLogout }: { branding: Branding; identity: Identity; automaticEntry: boolean; onLogout: () => void }) {
-  const [route, setRoute] = useState(parseRoute);
+  const [route, setRoute] = useState(() => parseRoute(identity.overlay_inventory));
   const { section, id, view, artifactId } = route;
   const board = section === "tasks" && view === "kanban";
   const unavailableView = section === "tasks" && !id && !!view && view !== "kanban";
@@ -108,7 +109,7 @@ function Workspace({ branding, identity, automaticEntry, onLogout }: { branding:
   const [refreshState, setRefreshState] = useState<"idle" | "refreshing" | "done" | "error">("idle");
   const [now, setNow] = useState(() => new Date());
   const writable = identity.role !== "reader";
-  const collection = !id && section !== "access" && section !== "connections" && section !== "threads" && section !== "traces" && section !== "schema" && section !== "publishing";
+  const collection = !id && section !== "access" && section !== "connections" && section !== "threads" && section !== "traces" && section !== "schema" && section !== "publishing" && section !== "inventory";
   const kind = Object.entries(kindSections).find(([, value]) => value === section)?.[0] ?? "";
   const newKind = writableKinds.includes(kind as WritableKind) ? kind as WritableKind : "note";
   const scope = JSON.stringify([section, query, sort]);
@@ -119,11 +120,11 @@ function Workspace({ branding, identity, automaticEntry, onLogout }: { branding:
     return () => media.removeEventListener("change", resize);
   }, []);
   useEffect(() => {
-    const sync = () => setRoute(parseRoute());
+    const sync = () => setRoute(parseRoute(identity.overlay_inventory));
     window.addEventListener("popstate", sync);
     if (window.location.pathname === "/") navigate("/objects", true);
     return () => window.removeEventListener("popstate", sync);
-  }, []);
+  }, [identity.overlay_inventory]);
   useEffect(() => { setQuery(""); setSort("recent"); setProject(""); setCreateOpen(false); }, [section]);
   useEffect(() => {
     let active = true;
@@ -206,7 +207,7 @@ function Workspace({ branding, identity, automaticEntry, onLogout }: { branding:
   }
   return <main className={collapsed ? "app nav-collapsed" : "app"}>
     <aside className="nav-rail" onKeyDown={event => { if (event.key === "Escape" && narrow && !collapsed) { event.stopPropagation(); closeNavigation(); } }}><div className="nav-head"><div className="brand" title={branding.name}><span className="brand-mark">{brandMark(branding.name)}</span>{!collapsed && <span className="brand-name">{branding.name}</span>}</div><button ref={navToggle} className="collapse-button" title={branding.name} onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-controls="workspace-navigation" aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}><span className="collapse-chevron" aria-hidden="true">‹</span><span className="brand-mark collapsed-brand-mark" aria-hidden="true">{brandMark(branding.name)}</span></button></div>
-      <nav id="workspace-navigation" aria-label={branding.name}>{(Object.keys(sections) as Section[]).filter(key => key !== "access" && (key !== "publishing" || publishingCalendarUrl)).map(key => <NavButton key={key} section={key} active={section === key} compact={collapsed} onClick={() => openSection(key)} />)}</nav>
+      <nav id="workspace-navigation" aria-label={branding.name}>{(Object.keys(sections) as Section[]).filter(key => key !== "access" && (key !== "publishing" || publishingCalendarUrl) && (key !== "inventory" || identity.overlay_inventory)).map(key => <NavButton key={key} section={key} active={section === key} compact={collapsed} onClick={() => openSection(key)} />)}</nav>
       <div className="nav-access"><NavButton section="access" active={section === "access"} compact={collapsed} onClick={() => openSection("access")} />{!automaticEntry && <button className="nav-button" title={`Sign out (${identity.role})`} aria-label="Sign out" onClick={async () => { try { await request("logout", {}); onLogout(); } catch (cause) { setError(message(cause)); } }}><span aria-hidden="true">↪</span>{!collapsed && "Sign out"}</button>}</div>
       <div className="nav-foot" title={`Authenticated ${identity.role}`}><span className="status-dot" />{!collapsed && `${identity.role} · Shared workspace`}</div>
     </aside>
@@ -227,7 +228,7 @@ function Workspace({ branding, identity, automaticEntry, onLogout }: { branding:
       {collection && writable && section !== "users" && <button className="collection-new" onClick={() => setCreateOpen(true)} aria-label={`New ${section === "objects" ? "object" : newKind}`}><span aria-hidden="true">＋</span> New</button>}
     </header>
     {(error || unavailableView) && <div className="error-banner"><div>{unavailableView && <span role="status">This view is unavailable. Showing the list. </span>}{error && <span role="alert">{error}</span>}</div>{error && <button aria-label="Dismiss error" onClick={() => setError("")}>×</button>}</div>}
-    <div className="workspace">{section === "publishing" ? <iframe className="publishing-frame" title="Publishing calendar" src={`${publishingCalendarUrl}/#embed`} /> : section === "schema" ? <SchemaWorkspace id={id} refreshKey={refreshKey} /> : section === "users" ? id ? <UserDetail id={id} refreshKey={refreshKey} onLoaded={setLoadedTitle} /> : <UserList users={displayUsers} query={query} sort={sort} /> : section === "threads" || section === "traces" ? <ConversationWorkspace section={section} id={id} identity={identity} refreshKey={refreshKey} onLoaded={setLoadedTitle} /> : section === "access" ? <Access identity={identity} users={users} refreshKey={refreshKey} onUsersChanged={() => setRefreshKey(value => value + 1)} /> : section === "connections" ? id ? <ConnectionDetail id={id} refreshKey={refreshKey} visuals={visuals} onLoaded={setLoadedTitle} /> : <ConnectionGraphWorkspace refreshKey={refreshKey} /> : id ? <section className="detail-page" key={`${id}:${artifactId}`}><ObjectDetail id={id} artifactId={artifactId} readingPositions={readingPositions.current} onLoaded={setLoadedTitle} writable={writable} users={users} displayUsers={displayUsers} visuals={visuals} refreshKey={refreshKey} /></section> : board ? <TaskBoard objects={items} visuals={visuals} loading={loading || loadedScope !== scope && !error} loadError={error} writable={writable} showDone={showDone} now={now} changeStatus={changeTaskStatus} reload={() => setRefreshKey(value => value + 1)} /> : <RecordList objects={items} groups={groups} visuals={visuals} section={section} now={now} loading={loading || loadedScope !== scope && !error} error={error} query={query}>{nextPage !== null && loadedScope === scope && <div className="collection-pagination"><span>{items.length} of {collectionTotal} records loaded</span><button className="secondary" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Loading…" : "Load more records"}</button></div>}</RecordList>}</div></section>
+    <div className="workspace">{section === "inventory" ? <OverlayInventory refreshKey={refreshKey} /> : section === "publishing" ? <iframe className="publishing-frame" title="Publishing calendar" src={`${publishingCalendarUrl}/#embed`} /> : section === "schema" ? <SchemaWorkspace id={id} refreshKey={refreshKey} /> : section === "users" ? id ? <UserDetail id={id} refreshKey={refreshKey} onLoaded={setLoadedTitle} /> : <UserList users={displayUsers} query={query} sort={sort} /> : section === "threads" || section === "traces" ? <ConversationWorkspace section={section} id={id} identity={identity} refreshKey={refreshKey} onLoaded={setLoadedTitle} /> : section === "access" ? <Access identity={identity} users={users} refreshKey={refreshKey} onUsersChanged={() => setRefreshKey(value => value + 1)} /> : section === "connections" ? id ? <ConnectionDetail id={id} refreshKey={refreshKey} visuals={visuals} onLoaded={setLoadedTitle} /> : <ConnectionGraphWorkspace refreshKey={refreshKey} /> : id ? <section className="detail-page" key={`${id}:${artifactId}`}><ObjectDetail id={id} artifactId={artifactId} readingPositions={readingPositions.current} onLoaded={setLoadedTitle} writable={writable} users={users} displayUsers={displayUsers} visuals={visuals} refreshKey={refreshKey} /></section> : board ? <TaskBoard objects={items} visuals={visuals} loading={loading || loadedScope !== scope && !error} loadError={error} writable={writable} showDone={showDone} now={now} changeStatus={changeTaskStatus} reload={() => setRefreshKey(value => value + 1)} /> : <RecordList objects={items} groups={groups} visuals={visuals} section={section} now={now} loading={loading || loadedScope !== scope && !error} error={error} query={query}>{nextPage !== null && loadedScope === scope && <div className="collection-pagination"><span>{items.length} of {collectionTotal} records loaded</span><button className="secondary" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Loading…" : "Load more records"}</button></div>}</RecordList>}</div></section>
     {createOpen && <NewObject initialKind={newKind} chooseKind={section === "objects"} users={users} identity={identity} onCancel={() => setCreateOpen(false)} onCreated={objectId => { setCreateOpen(false); navigate(objectPath(objectId)); }} />}
   </main>;
 }

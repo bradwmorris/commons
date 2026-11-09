@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Check the skill instruction budget in a Commons or overlay checkout."""
+import argparse
+import re
+import subprocess
+from pathlib import Path
+
+LIMIT = 6000
+SKILL = re.compile(r"(?:\.agents/skills|skills)/[a-z0-9-]+/SKILL\.md")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--base", default="HEAD", help="Compare with this commit, e.g. origin/main in a PR")
+    args = parser.parse_args()
+
+    def git(*command):
+        return subprocess.check_output(["git", "-C", args.root, *command]).decode("utf-8")
+
+    revision = git("rev-parse", "--verify", "--end-of-options", f"{args.base}^{{commit}}").strip()
+    paths = git("ls-files", "--cached", "--others", "--exclude-standard", "-z").split("\0")
+    changed = set(git("diff", "--name-only", "--no-renames", "-z", revision, "--").split("\0"))
+    changed.update(git("ls-files", "--others", "--exclude-standard", "-z").split("\0"))
+    failed = False
+    for path in sorted(set(paths)):
+        file = args.root / path
+        if not SKILL.fullmatch(path) or file.is_symlink() or not file.is_file():
+            continue
+        text = file.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        count = len(text)
+        if count <= LIMIT:
+            continue
+        blocking = path in changed
+        print(f"{'error' if blocking else 'legacy warning'}: {path}: "
+              f"{count:,}/{LIMIT:,} characters. Move examples or detail to a linked reference.")
+        failed |= blocking
+    return int(failed)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

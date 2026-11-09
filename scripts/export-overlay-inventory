@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Export a reviewable snapshot from one overlay's committed Markdown."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+# Repository-relative paths only. Tool catalogs and workflow guides are Markdown
+# so credential files, executable code and deployment configuration stay out.
+CATEGORIES = {
+    "instructions": r"AGENTS\.md|projects/[a-zA-Z0-9_-]+/AGENTS\.md",
+    "skill": r"\.agents/skills/[a-z0-9-]+/SKILL\.md",
+    "tool": r"docs/(?:tools|tool-ownership|integrations)\.md|tools/[a-zA-Z0-9_-]+/README\.md",
+    "workflow": r"docs/(?:workflows|[a-zA-Z0-9_-]+-workflow)\.md",
+}
+MAX_BYTES = 1024 * 1024
+MAX_FILE_BYTES = 64 * 1024
+PRIVATE_PATH = re.compile(r"(?:/Users/|/home/|/private/|~/|\$HOME/|\$\{HOME\}/)")
+CREDENTIAL = re.compile(
+    r"://[^/\s:@]+:[^/\s@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    r"|\b(?:gh[pousr]_|github_pat_|xox[baprs]-|sk-)[a-zA-Z0-9_-]{20,}"
+    r"|(?i:bearer) [a-zA-Z0-9._-]{20,}"
+)
+
+
+def export(root, installation, excluded):
+    def git(*args):
+        # Local overrides must not silently redirect an export to another repo.
+        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+        return subprocess.check_output(["git", "-C", root, *args], env=env)
+
+    if Path(os.fsdecode(git("rev-parse", "--show-toplevel").rstrip(b"\n"))).resolve() != root:
+        raise ValueError("pass the overlay repository root")
+    revision = git("rev-parse", "--verify", "HEAD^{commit}").decode().strip()
+    entries = []
+    matched_exclusions = set()
+    for row in git("ls-tree", "-rlz", revision).split(b"\0"):
+        if not row:
+            continue
+        meta, raw_path = row.split(b"\t", 1)
+        mode, kind, oid, size = meta.split()
+        if mode not in {b"100644", b"100755"} or kind != b"blob":
+            continue
+        path = os.fsdecode(raw_path)
+        category = next((name for name, pattern in CATEGORIES.items() if re.fullmatch(pattern, path)), None)
+        if category is None:
+            continue
+        if path in excluded:
+            matched_exclusions.add(path)
+            continue
+        if int(size) > MAX_FILE_BYTES:
+            raise ValueError(f"{path}: exceeds the {MAX_FILE_BYTES}-byte export limit")
+        contents = git("cat-file", "blob", oid.decode()).decode("utf-8")
+        if CREDENTIAL.search(contents):
+            raise ValueError(f"{path}: possible credential; review the source or exclude the file")
+        text = "".join("[Local path omitted]" + ("\n" if line.endswith("\n") else "")
+                       if PRIVATE_PATH.search(line) else line
+                       for line in contents.splitlines(keepends=True))
+        entries.append({"category": category, "path": path, "text": text})
+    if excluded != matched_exclusions:
+        raise ValueError("each --exclude must match an eligible file at HEAD")
+    if not any(entry["path"] == "AGENTS.md" for entry in entries):
+        raise ValueError("the overlay needs a committed, regular root AGENTS.md")
+    payload = json.dumps(dict(version=1, installation=installation, revision=revision, entries=entries),
+                         ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
+    if len(payload) > MAX_BYTES:
+        raise ValueError(f"snapshot exceeds the {MAX_BYTES}-byte export limit")
+    return payload
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("repository", type=Path)
+    parser.add_argument("installation", help="Exact COMMONS_INSTALLATION_NAME")
+    parser.add_argument("--exclude", action="append", default=[], help="Omit one repository-relative file")
+    args = parser.parse_args()
+    try:
+        sys.stdout.buffer.write(export(args.repository.resolve(), args.installation, set(args.exclude)))
+    except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        parser.exit(1, f"Export failed: {error}\n")
+
+
+if __name__ == "__main__":
+    main()

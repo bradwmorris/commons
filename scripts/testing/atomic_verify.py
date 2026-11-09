@@ -44,10 +44,12 @@ def verify(args):
         if len(available) != 2: raise RuntimeError('No unused synthetic network range')
         override = Path(directory)/'networks.json'
         override.write_text(json.dumps({'networks': {name:{'ipam':{'config':[{'subnet':str(subnet)}]}} for name,subnet in zip(['private','ingress'],available)}}))
+        inventory_override = None
         def compose(*argv):
             env = {k:v for k,v in os.environ.items() if not k.startswith(('COMMONS_', 'COMPOSE_'))}
             env.update(values)
-            result = subprocess.run(['docker','compose','--env-file',os.devnull,'--project-directory',str(ROOT),'--file',str(ROOT/'compose.yaml'),'--file',str(override),'--project-name',values['COMPOSE_PROJECT_NAME'],*argv], env=env, capture_output=True)
+            extra = ['--file', str(inventory_override)] if inventory_override else []
+            result = subprocess.run(['docker','compose','--env-file',os.devnull,'--project-directory',str(ROOT),'--file',str(ROOT/'compose.yaml'),'--file',str(override),'--project-name',values['COMPOSE_PROJECT_NAME'],*extra,*argv], env=env, capture_output=True)
             with (results/'commands.log').open('ab') as log:
                 log.write(result.stderr)
             if result.returncode:
@@ -98,6 +100,23 @@ def verify(args):
             else: raise RuntimeError('restart readiness failed')
             assert client.call('objects/' + sentinel) == before
             report['checks'].append('whole PostgreSQL/API restart with exact public record readback')
+            inventory_test = ['node', 'tests/e2e/overlay-inventory-check.mjs']
+            command(inventory_test, dict(env, COMMONS_TEST_INVENTORY_MODE='disabled'))
+            snapshot = Path(directory) / 'overlay-inventory.json'
+            values['COMMONS_OVERLAY_INVENTORY_SNAPSHOT'] = str(snapshot)
+            inventory_override = ROOT / 'docker/overlay-inventory.compose.yaml'
+            for mode, brand in [('enabled', 'Commons'), ('wrong-installation', 'Other Commons')]:
+                snapshot.write_text(json.dumps(dict(
+                    version=1, installation=brand, revision='0' * 40, entries=[
+                        dict(category='instructions', path='AGENTS.md', text='<script>syntheticOverlayOnly</script>'),
+                        dict(category='tool', path='docs/tools.md', text=''),
+                    ],
+                )))
+                snapshot.chmod(0o644)
+                compose('up', '-d', '--no-deps', '--force-recreate', '--wait', 'app')
+                command(inventory_test, dict(env, COMMONS_TEST_INVENTORY_MODE=mode))
+            report['checks'].append('overlay inventory browser, auth, empty entries, and wrong-installation denial')
+
             command(['cargo', 'test', '--locked'])
             command(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'integrations/mcp/tests', '-v'])
             command(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tools/tests', '-v'])

@@ -1,0 +1,12 @@
+# Optional app-only override. Set the reviewed snapshot path separately per install.
+services:
+  app:
+    environment:
+      COMMONS_OVERLAY_INVENTORY_FILE: /run/commons/overlay-inventory.json
+    volumes:
+      - type: bind
+        source: ${COMMONS_OVERLAY_INVENTORY_SNAPSHOT:?Set this installation's reviewed inventory snapshot}
+        target: /run/commons/overlay-inventory.json
+        read_only: true
+        bind:
+          create_host_path: false

@@ -1,5 +1,7 @@
 # Standalone installation and lifecycle
 
+For the optional member view, see [Overlay inventory](overlay-inventory.md).
+
 This guide is the standalone adopter path: install an empty workspace, verify a first
 record, connect an agent, then practise operation and recovery. It also serves an
 operator installing Commons for another organisation. Use fictional data for the

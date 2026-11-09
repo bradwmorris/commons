@@ -29,6 +29,7 @@ mod conversations;
 mod evidence;
 mod installation;
 mod object_reads;
+mod overlay_inventory;
 mod packet;
 mod records;
 mod retrieval;
@@ -45,6 +46,7 @@ struct App {
     installation_name: String,
     theme: String,
     appearance_css: String,
+    overlay_inventory: overlay_inventory::Inventory,
     model: Option<retrieval::Model>,
 }
 fn digest(s: &str) -> String {
@@ -56,9 +58,11 @@ fn secret() -> String {
 async fn me(State(app): State<App>, headers: HeaderMap) -> Result<Json<Value>> {
     let mut tx = app.db.begin().await?;
     let a = actor(&app, &headers, &mut tx, false).await?;
-    Ok(Json(
-        json!({"id":a.id,"role":a.role,"mode":a.mode,"write_kinds":a.kinds}),
-    ))
+    let mut identity = json!({"id":a.id,"role":a.role,"mode":a.mode,"write_kinds":a.kinds});
+    if overlay_inventory::can_browse(&a) && app.overlay_inventory.enabled() {
+        identity["overlay_inventory"] = json!(true);
+    }
+    Ok(Json(identity))
 }
 async fn contract(State(app): State<App>, headers: HeaderMap) -> Result<Json<Value>> {
     let mut tx = app.db.begin().await?;
@@ -366,6 +370,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         _ => String::new(),
     };
     let app = App {
+        overlay_inventory: if protected_demo_user.is_some() {
+            overlay_inventory::Inventory::Disabled
+        } else {
+            overlay_inventory::Inventory::configured(&installation_name)
+        },
         db,
         secure: origin.starts_with("https://"),
         origin,
@@ -394,6 +403,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .route("/api/login", post(login))
         .route("/api/logout", post(logout))
         .route("/api/me", get(me))
+        .route("/api/overlay-inventory", get(overlay_inventory::read))
         .route("/api/contract", get(contract))
         .route("/api/users", get(collections::users).post(users))
         .route("/api/participants", get(collections::participants))

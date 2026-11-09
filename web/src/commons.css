@@ -175,3 +175,18 @@ button:disabled { cursor: not-allowed; }
 .thread-participants a { display: inline-flex; pointer-events: auto; border-radius: 50%; }
 .thread-participants a:focus-visible { outline: 2px solid var(--appearance-accent); outline-offset: 1px; }
 .thread-list-view .record-main { flex-wrap: wrap; }
+
+.overlay-inventory { padding: 0 20px 24px; }
+.overlay-inventory .list-view-head { padding-inline: 0; }
+.overlay-inventory h2 { font-size: 16px; margin-top: 24px; }
+.overlay-inventory details { border-bottom: 1px solid var(--border); }
+.overlay-inventory summary { padding: 10px 4px; cursor: pointer; overflow-wrap: anywhere; }
+.overlay-inventory pre {
+  padding: 12px;
+  background: var(--panel-raised);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.overlay-inventory code { overflow-wrap: anywhere; }

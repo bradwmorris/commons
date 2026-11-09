@@ -43,7 +43,7 @@ export interface Artifact {
   expected_size_bytes: number | null; semantic_indexing_enabled: boolean; metadata: Record<string, unknown>;
   supersedes_artifact_id: string | null; captured_at: string | null;
 }
-export interface Identity { id: string; role: "admin" | "member" | "reader"; mode: "session" | "agent"; write_kinds: string[] }
+export interface Identity { id: string; role: "admin" | "member" | "reader"; mode: "session" | "agent"; write_kinds: string[]; overlay_inventory?: boolean }
 export interface Credential { id: string; account_id: string; label: string; write_kinds: string[]; revoked: boolean }
 
 // Retained Context presentation contracts; no fabricated provenance or actor type.
